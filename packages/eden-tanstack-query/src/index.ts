@@ -1,6 +1,17 @@
 // @eden-tanstack-query/react
 // TanStack Query integration for Elysia Eden
 
+// React context
+export {
+	type CreateEdenContextResult,
+	createEdenContext,
+	type EdenProviderProps,
+} from "./context"
+// Main factory
+export {
+	type CreateEdenTanStackQueryResult,
+	createEdenTanStackQuery,
+} from "./createEdenTanStackQuery"
 export type { GetMutationKeyOptions, GetQueryKeyOptions } from "./keys/queryKey"
 // Query key generation
 export { getMutationKey, getQueryKey } from "./keys/queryKey"
@@ -32,7 +43,27 @@ export {
 	type CreateEdenOptionsProxyOptions,
 	createEdenOptionsProxy,
 } from "./proxy/createOptionsProxy"
-
+// Decorator types for query/mutation procedures
+export type {
+	DecoratedRouteMethods,
+	DecorateInfiniteQueryProcedure,
+	DecorateMutationProcedure,
+	DecorateQueryProcedure,
+	DecorateRoute,
+	DecorateRoutes,
+	EdenInfiniteQueryOptions,
+	EdenMutationOptions,
+	EdenOptionsProxy,
+	EdenQueryBaseOptions,
+	EdenQueryOptions,
+	EdenQueryOptionsResult,
+	ExtractCursorType,
+	ExtractRouteDef,
+	HasCursorInput,
+	inferError,
+	inferInput,
+	inferOutput,
+} from "./types/decorators"
 // Route type inference utilities
 export type {
 	EdenFetchError,
@@ -56,7 +87,6 @@ export type {
 	PathParamsToObject,
 	RouteDefinition,
 } from "./types/infer"
-
 // Utility types
 export type {
 	DeepPartial,
@@ -65,28 +95,3 @@ export type {
 	IsUnknown,
 	Simplify,
 } from "./utils/types"
-
-// TODO: Export main factory
-// export { createEdenTanStackQuery } from './createEdenTanStackQuery'
-
-// Decorator types for query/mutation procedures
-export type {
-	DecoratedRouteMethods,
-	DecorateInfiniteQueryProcedure,
-	DecorateMutationProcedure,
-	DecorateQueryProcedure,
-	DecorateRoute,
-	DecorateRoutes,
-	EdenInfiniteQueryOptions,
-	EdenMutationOptions,
-	EdenOptionsProxy,
-	EdenQueryBaseOptions,
-	EdenQueryOptions,
-	EdenQueryOptionsResult,
-	ExtractCursorType,
-	ExtractRouteDef,
-	HasCursorInput,
-	inferError,
-	inferInput,
-	inferOutput,
-} from "./types/decorators"

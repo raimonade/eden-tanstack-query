@@ -1,0 +1,5 @@
+[test]
+preload = [
+  "./packages/eden-tanstack-query/test-utils/happydom.ts",
+  "./packages/eden-tanstack-query/test-utils/testing-library.ts"
+]
