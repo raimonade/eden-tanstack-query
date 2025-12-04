@@ -9,6 +9,7 @@ import type {
 
 import { getMutationKey } from "../keys/queryKey"
 import type { EdenMutationKey } from "../keys/types"
+import type { EmptyToVoid } from "../utils/types"
 
 // ============================================================================
 // Input Types
@@ -50,12 +51,13 @@ export type EdenMutationOptionsIn<TOutput, TError, TInput, TContext> = Omit<
  * Output options returned by edenMutationOptions.
  * Includes the mutation key and eden metadata.
  * mutationFn is guaranteed to be defined.
+ * Uses EmptyToVoid<TInput> so mutate() can be called without args when input is empty.
  */
 export interface EdenMutationOptionsOut<TOutput, TError, TInput, TContext>
-	extends UseMutationOptions<TOutput, TError, TInput, TContext>,
+	extends UseMutationOptions<TOutput, TError, EmptyToVoid<TInput>, TContext>,
 		EdenMutationOptionsResult {
 	mutationKey: EdenMutationKey
-	mutationFn: MutationFunction<TOutput, TInput>
+	mutationFn: MutationFunction<TOutput, EmptyToVoid<TInput>>
 }
 
 /**
@@ -120,15 +122,21 @@ export function edenMutationOptions<
 
 	const mutationKey = getMutationKey({ path })
 
-	const mutationFn: MutationFunction<TOutput, TInput> = async (
+	const mutationFn: MutationFunction<TOutput, EmptyToVoid<TInput>> = async (
 		input,
 		_context,
 	) => {
-		return await mutate(input)
+		return await mutate(input as TInput)
 	}
 
+	// Cast opts to match EmptyToVoid<TInput> for variables type
+	const outputOpts = opts as unknown as Omit<
+		UseMutationOptions<TOutput, TError, EmptyToVoid<TInput>, TContext>,
+		ReservedOptions
+	>
+
 	return {
-		...opts,
+		...outputOpts,
 		mutationKey,
 		mutationFn,
 		eden: {

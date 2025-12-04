@@ -1,6 +1,97 @@
+import type { DataTag } from "@tanstack/react-query"
 import { skipToken } from "@tanstack/react-query"
 import { edenQueryOptions } from "../../src/options/queryOptions"
+import type { EdenQueryKey } from "../../src/keys/types"
 import { createTestQueryClient } from "../../test-utils"
+
+// ============================================================================
+// Type Tests - Compile-time verification
+// ============================================================================
+
+describe("edenQueryOptions type inference", () => {
+	// Test types
+	type TestOutput = { id: string; name: string }
+	type TestInput = { id: string }
+
+	test("return type has correct queryKey with DataTag", () => {
+		const options = edenQueryOptions({
+			path: ["api", "users", "get"],
+			input: { id: "1" } as TestInput,
+			fetch: async (): Promise<TestOutput> => ({ id: "1", name: "Test" }),
+		})
+
+		// Verify queryKey is DataTag with correct TData
+		type QueryKeyType = typeof options.queryKey
+		type ExtractedData = QueryKeyType extends DataTag<
+			EdenQueryKey,
+			infer TData,
+			unknown
+		>
+			? TData
+			: never
+
+		// This assignment will fail at compile time if types don't match
+		const _typeCheck: ExtractedData = {} as TestOutput
+		expect(_typeCheck).toBeDefined()
+	})
+
+	test("data type is correctly inferred when used with fetchQuery", async () => {
+		const queryClient = createTestQueryClient()
+
+		const options = edenQueryOptions({
+			path: ["api", "users", "get"],
+			input: { id: "1" },
+			fetch: async () => ({ id: "1", name: "Test" }),
+		})
+
+		const result = await queryClient.fetchQuery(options)
+
+		// Type assertion - will fail at compile time if result is wrong type
+		const _typeCheck: { id: string; name: string } = result
+		expect(_typeCheck.id).toBe("1")
+		expect(_typeCheck.name).toBe("Test")
+	})
+
+	test("initialData makes data type non-undefined", () => {
+		const options = edenQueryOptions({
+			path: ["api", "users", "get"],
+			input: { id: "1" },
+			fetch: async () => ({ id: "1", name: "Test" }),
+			opts: {
+				initialData: { id: "0", name: "Initial" },
+			},
+		})
+
+		// With initialData, the type should be defined
+		type OptionsType = typeof options
+		type HasInitialData = OptionsType extends { initialData: infer T }
+			? T extends undefined
+				? false
+				: true
+			: false
+
+		const _hasInitialData: HasInitialData = true
+		expect(_hasInitialData).toBe(true)
+	})
+
+	test("options with staleTime are passed through", () => {
+		const options = edenQueryOptions({
+			path: ["api", "users", "get"],
+			input: { id: "1" },
+			fetch: async () => ({ id: "1", name: "Test" }),
+			opts: {
+				staleTime: 5000,
+			},
+		})
+
+		// Verify options are passed through
+		expect(options.staleTime).toBe(5000)
+	})
+})
+
+// ============================================================================
+// Runtime Tests
+// ============================================================================
 
 describe("edenQueryOptions", () => {
 	const queryClient = createTestQueryClient()

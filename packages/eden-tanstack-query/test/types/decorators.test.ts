@@ -706,3 +706,253 @@ describe("EdenQueryOptionsResult", () => {
 		expect(hasPath).toBe(true)
 	})
 })
+
+// ============================================================================
+// EdenQueryOptions Callable Interface Tests
+// ============================================================================
+
+describe("EdenQueryOptions callable interface", () => {
+	type TestDef = {
+		input: { search?: string }
+		output: { id: string; name: string }
+		error: { message: string }
+	}
+
+	type EmptyInputDef = {
+		input: Record<never, never>
+		output: { message: string }
+		error: { code: number }
+	}
+
+	// For callable interface testing, we test via DecorateQueryProcedure
+	// which is what actual usage looks like
+	type TestQueryProcedure = DecorateQueryProcedure<TestDef>
+	type EmptyInputQueryProcedure = DecorateQueryProcedure<EmptyInputDef>
+
+	test("DecorateQueryProcedure.queryOptions exists", () => {
+		// Verify the queryOptions property exists
+		type HasQueryOptions = "queryOptions" extends keyof TestQueryProcedure
+			? true
+			: false
+
+		const hasQueryOptions: HasQueryOptions = true
+		expect(hasQueryOptions).toBe(true)
+	})
+
+	test("queryOptions returns object with queryKey and eden via proxy", () => {
+		// Test via the proxy type which is the real usage
+		type UsersGetProcedure = EdenOptionsProxy<App>["users"]["get"]
+		type QueryOptionsMethod = UsersGetProcedure["queryOptions"]
+
+		// For callable types, ReturnType picks the last overload
+		type LastOverloadReturn = ReturnType<QueryOptionsMethod>
+
+		// Check that return type has expected properties
+		type HasQueryKey = "queryKey" extends keyof LastOverloadReturn ? true : false
+		type HasEden = "eden" extends keyof LastOverloadReturn ? true : false
+
+		const hasQueryKey: HasQueryKey = true
+		const hasEden: HasEden = true
+
+		expect(hasQueryKey).toBe(true)
+		expect(hasEden).toBe(true)
+	})
+
+	test("empty input procedure allows void via EmptyToVoid", () => {
+		// For empty input, the type should allow calling with void
+		type QueryOptionsMethod = EmptyInputQueryProcedure["queryOptions"]
+
+		// Parameters should allow void/undefined for first argument
+		type FirstParam = Parameters<QueryOptionsMethod>[0]
+		// biome-ignore lint/suspicious/noConfusingVoidType: testing void type
+		type AllowsVoid = void extends FirstParam ? true : false
+
+		const allowsVoid: AllowsVoid = true
+		expect(allowsVoid).toBe(true)
+	})
+
+	test("~types correctly exposes output type", () => {
+		// The ~types helper should expose the correct output
+		type OutputType = TestQueryProcedure["~types"]["output"]
+		type IsCorrect = OutputType extends { id: string; name: string }
+			? true
+			: false
+
+		const isCorrect: IsCorrect = true
+		expect(isCorrect).toBe(true)
+	})
+})
+
+// ============================================================================
+// EdenOptionsProxy Full Path Type Tests
+// ============================================================================
+
+describe("EdenOptionsProxy queryOptions return types", () => {
+	type Proxy = EdenOptionsProxy<App>
+
+	test("proxy.users.get.queryOptions() returns object, not function", () => {
+		// This test ensures the full proxy chain works correctly
+		type UsersGet = Proxy["users"]["get"]
+		type QueryOptionsMethod = UsersGet["queryOptions"]
+		type CallResult = ReturnType<QueryOptionsMethod>
+
+		// Critical: CallResult should be an object with queryKey, queryFn, eden
+		// NOT a function type like () => never
+		type IsObject = CallResult extends { queryKey: unknown; eden: unknown }
+			? true
+			: false
+		type IsNotFunction = CallResult extends (...args: unknown[]) => unknown
+			? false
+			: true
+
+		const isObject: IsObject = true
+		const isNotFunction: IsNotFunction = true
+
+		expect(isObject).toBe(true)
+		expect(isNotFunction).toBe(true)
+	})
+
+	test("proxy.users.post.mutationOptions() returns correct type", () => {
+		type UsersPost = Proxy["users"]["post"]
+		type MutationOptionsMethod = UsersPost["mutationOptions"]
+		type CallResult = ReturnType<MutationOptionsMethod>
+
+		type HasMutationKey = CallResult extends { mutationKey: unknown }
+			? true
+			: false
+		type HasMutationFn = CallResult extends { mutationFn: unknown }
+			? true
+			: false
+
+		const hasMutationKey: HasMutationKey = true
+		const hasMutationFn: HasMutationFn = true
+
+		expect(hasMutationKey).toBe(true)
+		expect(hasMutationFn).toBe(true)
+	})
+})
+
+// ============================================================================
+// EdenMutationOptions Callable Interface Tests
+// ============================================================================
+
+describe("EdenMutationOptions callable interface", () => {
+	type TestDef = {
+		input: { name: string; email: string }
+		output: { id: string; name: string; email: string }
+		error: { message: string }
+	}
+
+	type TestMutationProcedure = DecorateMutationProcedure<TestDef>
+
+	test("DecorateMutationProcedure.mutationOptions exists", () => {
+		type HasMutationOptions = "mutationOptions" extends keyof TestMutationProcedure
+			? true
+			: false
+
+		const hasMutationOptions: HasMutationOptions = true
+		expect(hasMutationOptions).toBe(true)
+	})
+
+	test("mutationOptions returns object with mutationKey, mutationFn, eden", () => {
+		type MutationOptionsMethod = TestMutationProcedure["mutationOptions"]
+		type CallResult = ReturnType<MutationOptionsMethod>
+
+		type HasMutationKey = "mutationKey" extends keyof CallResult ? true : false
+		type HasMutationFn = "mutationFn" extends keyof CallResult ? true : false
+		type HasEden = "eden" extends keyof CallResult ? true : false
+
+		const hasMutationKey: HasMutationKey = true
+		const hasMutationFn: HasMutationFn = true
+		const hasEden: HasEden = true
+
+		expect(hasMutationKey).toBe(true)
+		expect(hasMutationFn).toBe(true)
+		expect(hasEden).toBe(true)
+	})
+
+	test("mutationFn exists in return type", () => {
+		type MutationOptionsMethod = TestMutationProcedure["mutationOptions"]
+		type CallResult = ReturnType<MutationOptionsMethod>
+
+		// mutationFn should exist in the return type
+		type HasMutationFn = "mutationFn" extends keyof CallResult ? true : false
+
+		const hasMutationFn: HasMutationFn = true
+		expect(hasMutationFn).toBe(true)
+	})
+
+	test("~types correctly exposes input and output", () => {
+		type InputType = TestMutationProcedure["~types"]["input"]
+		type OutputType = TestMutationProcedure["~types"]["output"]
+
+		type InputCorrect = InputType extends { name: string; email: string }
+			? true
+			: false
+		type OutputCorrect = OutputType extends { id: string; name: string; email: string }
+			? true
+			: false
+
+		const inputCorrect: InputCorrect = true
+		const outputCorrect: OutputCorrect = true
+
+		expect(inputCorrect).toBe(true)
+		expect(outputCorrect).toBe(true)
+	})
+})
+
+// ============================================================================
+// EdenInfiniteQueryOptions Callable Interface Tests
+// ============================================================================
+
+describe("EdenInfiniteQueryOptions callable interface", () => {
+	type TestDef = {
+		input: { limit: number; cursor?: string }
+		output: { items: { id: string }[]; nextCursor: string | null }
+		error: { message: string }
+	}
+
+	type TestInfiniteQueryProcedure = DecorateInfiniteQueryProcedure<TestDef>
+
+	test("DecorateInfiniteQueryProcedure.infiniteQueryOptions exists", () => {
+		type HasInfiniteQueryOptions =
+			"infiniteQueryOptions" extends keyof TestInfiniteQueryProcedure
+				? true
+				: false
+
+		const hasInfiniteQueryOptions: HasInfiniteQueryOptions = true
+		expect(hasInfiniteQueryOptions).toBe(true)
+	})
+
+	test("infiniteQueryKey exists", () => {
+		type HasInfiniteQueryKey =
+			"infiniteQueryKey" extends keyof TestInfiniteQueryProcedure ? true : false
+
+		const hasInfiniteQueryKey: HasInfiniteQueryKey = true
+		expect(hasInfiniteQueryKey).toBe(true)
+	})
+
+	test("infiniteQueryFilter exists", () => {
+		type HasInfiniteQueryFilter =
+			"infiniteQueryFilter" extends keyof TestInfiniteQueryProcedure
+				? true
+				: false
+
+		const hasInfiniteQueryFilter: HasInfiniteQueryFilter = true
+		expect(hasInfiniteQueryFilter).toBe(true)
+	})
+
+	test("~types correctly exposes input and output", () => {
+		type InputType = TestInfiniteQueryProcedure["~types"]["input"]
+		type OutputType = TestInfiniteQueryProcedure["~types"]["output"]
+
+		type InputHasLimit = InputType extends { limit: number } ? true : false
+		type OutputHasItems = OutputType extends { items: unknown[] } ? true : false
+
+		const inputHasLimit: InputHasLimit = true
+		const outputHasItems: OutputHasItems = true
+
+		expect(inputHasLimit).toBe(true)
+		expect(outputHasItems).toBe(true)
+	})
+})

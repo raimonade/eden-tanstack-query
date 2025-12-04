@@ -1,6 +1,141 @@
+import type { DataTag } from "@tanstack/react-query"
 import { skipToken } from "@tanstack/react-query"
 import { edenInfiniteQueryOptions } from "../../src/options/infiniteQueryOptions"
+import type { EdenQueryKey } from "../../src/keys/types"
 import { createTestQueryClient } from "../../test-utils"
+
+// ============================================================================
+// Type Tests - Compile-time verification
+// ============================================================================
+
+describe("edenInfiniteQueryOptions type inference", () => {
+	type TestInput = { limit: number; cursor?: string }
+	type TestOutput = {
+		items: Array<{ id: string; title: string }>
+		nextCursor: string | null
+	}
+
+	test("return type has correct queryKey with DataTag", () => {
+		const options = edenInfiniteQueryOptions({
+			path: ["api", "posts", "get"],
+			input: { limit: 10 } as TestInput,
+			initialPageParam: null as string | null,
+			fetch: async (): Promise<TestOutput> => ({
+				items: [],
+				nextCursor: null,
+			}),
+			opts: {
+				getNextPageParam: (page) => page.nextCursor ?? undefined,
+			},
+		})
+
+		// Verify queryKey is DataTag with correct type
+		type QueryKeyType = typeof options.queryKey
+		type IsDataTag = QueryKeyType extends DataTag<EdenQueryKey, unknown, unknown>
+			? true
+			: false
+
+		const _isDataTag: IsDataTag = true
+		expect(_isDataTag).toBe(true)
+	})
+
+	test("getNextPageParam receives correct page type", () => {
+		const options = edenInfiniteQueryOptions({
+			path: ["api", "posts", "get"],
+			input: { limit: 10 },
+			initialPageParam: null as string | null,
+			fetch: async (): Promise<TestOutput> => ({
+				items: [{ id: "1", title: "Test" }],
+				nextCursor: "cursor-1",
+			}),
+			opts: {
+				getNextPageParam: (lastPage) => {
+					// Type assertion - lastPage should be TestOutput
+					const _typeCheck: TestOutput = lastPage
+					void _typeCheck
+					return lastPage.nextCursor ?? undefined
+				},
+			},
+		})
+
+		expect(options.getNextPageParam).toBeDefined()
+	})
+
+	test("getPreviousPageParam receives correct page type", () => {
+		type OutputWithPrev = TestOutput & { previousCursor: string | null }
+
+		const options = edenInfiniteQueryOptions({
+			path: ["api", "posts", "get"],
+			input: { limit: 10 },
+			initialPageParam: null as string | null,
+			fetch: async (): Promise<OutputWithPrev> => ({
+				items: [],
+				nextCursor: null,
+				previousCursor: null,
+			}),
+			opts: {
+				getNextPageParam: (page) => page.nextCursor ?? undefined,
+				getPreviousPageParam: (firstPage) => {
+					// Type assertion - firstPage should be OutputWithPrev
+					const _typeCheck: OutputWithPrev = firstPage
+					void _typeCheck
+					return firstPage.previousCursor ?? undefined
+				},
+			},
+		})
+
+		expect(options.getPreviousPageParam).toBeDefined()
+	})
+
+	test("fetch function receives input with cursor", async () => {
+		const options = edenInfiniteQueryOptions({
+			path: ["api", "posts", "get"],
+			input: { limit: 10 },
+			initialPageParam: null as string | null,
+			fetch: async (input) => {
+				// Input should include cursor from pageParam
+				type InputType = typeof input
+				type HasCursor = "cursor" extends keyof InputType ? true : false
+				const _hasCursor: HasCursor = true
+				void _hasCursor
+
+				return { items: [], nextCursor: null }
+			},
+			opts: {
+				getNextPageParam: () => undefined,
+			},
+		})
+
+		expect(options.queryFn).toBeDefined()
+	})
+
+	test("data type is correctly inferred with fetchInfiniteQuery", async () => {
+		const queryClient = createTestQueryClient()
+
+		const options = edenInfiniteQueryOptions({
+			path: ["api", "posts", "get"],
+			input: { limit: 10 },
+			initialPageParam: null as string | null,
+			fetch: async (): Promise<TestOutput> => ({
+				items: [{ id: "1", title: "Test" }],
+				nextCursor: null,
+			}),
+			opts: {
+				getNextPageParam: (page) => page.nextCursor ?? undefined,
+			},
+		})
+
+		const result = await queryClient.fetchInfiniteQuery(options)
+
+		// Type assertion - pages should be TestOutput[]
+		const _typeCheck: TestOutput[] = result.pages
+		expect(_typeCheck[0]?.items[0]?.id).toBe("1")
+	})
+})
+
+// ============================================================================
+// Runtime Tests
+// ============================================================================
 
 describe("edenInfiniteQueryOptions", () => {
 	const queryClient = createTestQueryClient()

@@ -1,5 +1,116 @@
 import { edenMutationOptions } from "../../src/options/mutationOptions"
+import type { EdenMutationKey } from "../../src/keys/types"
 import { createTestQueryClient } from "../../test-utils"
+
+// ============================================================================
+// Type Tests - Compile-time verification
+// ============================================================================
+
+describe("edenMutationOptions type inference", () => {
+	type TestInput = { name: string; email: string }
+	type TestOutput = { id: string; name: string; email: string }
+
+	test("return type has correct mutationKey", () => {
+		const options = edenMutationOptions({
+			path: ["api", "users", "post"],
+			mutate: async (input: TestInput): Promise<TestOutput> => ({
+				id: "1",
+				...input,
+			}),
+		})
+
+		// Verify mutationKey is EdenMutationKey
+		type MutationKeyType = typeof options.mutationKey
+		type IsCorrectKey = MutationKeyType extends EdenMutationKey ? true : false
+
+		const _isCorrectKey: IsCorrectKey = true
+		expect(_isCorrectKey).toBe(true)
+	})
+
+	test("mutationFn has correct input and output types", async () => {
+		const options = edenMutationOptions({
+			path: ["api", "users", "post"],
+			mutate: async (input: TestInput): Promise<TestOutput> => ({
+				id: "1",
+				...input,
+			}),
+		})
+
+		// Type assertion - will fail at compile time if types are wrong
+		const result = await options.mutationFn(
+			{ name: "Test", email: "test@example.com" },
+			{ client: createTestQueryClient(), meta: undefined },
+		)
+
+		const _typeCheck: TestOutput = result
+		expect(_typeCheck.id).toBe("1")
+	})
+
+	test("onSuccess receives correct data type", () => {
+		const options = edenMutationOptions({
+			path: ["api", "users", "post"],
+			mutate: async (input: TestInput): Promise<TestOutput> => ({
+				id: "1",
+				...input,
+			}),
+			opts: {
+				onSuccess: (data) => {
+					// Type assertion - data should be TestOutput
+					const _typeCheck: TestOutput = data
+					void _typeCheck
+				},
+			},
+		})
+
+		expect(options.onSuccess).toBeDefined()
+	})
+
+	test("onMutate receives correct variables type", () => {
+		const options = edenMutationOptions({
+			path: ["api", "users", "post"],
+			mutate: async (input: TestInput): Promise<TestOutput> => ({
+				id: "1",
+				...input,
+			}),
+			opts: {
+				onMutate: (variables) => {
+					// Type assertion - variables should be TestInput
+					const _typeCheck: TestInput = variables
+					void _typeCheck
+					return { previousData: [] }
+				},
+			},
+		})
+
+		expect(options.onMutate).toBeDefined()
+	})
+
+	test("context type is preserved in callbacks", () => {
+		type Context = { previousData: TestOutput[] }
+
+		const options = edenMutationOptions<TestInput, TestOutput, Error, Context>({
+			path: ["api", "users", "post"],
+			mutate: async (input) => ({ id: "1", ...input }),
+			opts: {
+				onMutate: () => ({ previousData: [] }),
+				onError: (_error, _variables, context) => {
+					// Context should be Context | undefined
+					if (context) {
+						const _typeCheck: TestOutput[] = context.previousData
+						void _typeCheck
+					}
+				},
+			},
+		})
+
+		expect(options.onMutate).toBeDefined()
+		expect(options.onError).toBeDefined()
+	})
+})
+
+// ============================================================================
+// Runtime Tests
+// ============================================================================
 
 describe("edenMutationOptions", () => {
 	const queryClient = createTestQueryClient()

@@ -77,11 +77,17 @@ interface UndefinedEdenQueryOptionsIn<TQueryFnData, TData, TError>
 
 /**
  * Output options with undefined initial data.
+ * Passes TQueryFnData and TData separately for proper type inference with select().
  */
-interface UndefinedEdenQueryOptionsOut<TOutput, TError>
-	extends UndefinedInitialDataOptions<TOutput, TError, TOutput, EdenQueryKey>,
+interface UndefinedEdenQueryOptionsOut<TQueryFnData, TData, TError>
+	extends UndefinedInitialDataOptions<
+			TQueryFnData,
+			TError,
+			TData,
+			EdenQueryKey
+		>,
 		EdenQueryOptionsResult {
-	queryKey: DataTag<EdenQueryKey, TOutput, TError>
+	queryKey: DataTag<EdenQueryKey, TData, TError>
 }
 
 /**
@@ -102,9 +108,10 @@ interface DefinedEdenQueryOptionsIn<TQueryFnData, TData, TError>
 
 /**
  * Output options with defined initial data.
+ * Passes TQueryFnData and TData separately for proper type inference with select().
  */
-interface DefinedEdenQueryOptionsOut<TData, TError>
-	extends DefinedInitialDataOptions<TData, TError, TData, EdenQueryKey>,
+interface DefinedEdenQueryOptionsOut<TQueryFnData, TData, TError>
+	extends DefinedInitialDataOptions<TQueryFnData, TError, TData, EdenQueryKey>,
 		EdenQueryOptionsResult {
 	queryKey: DataTag<EdenQueryKey, TData, TError>
 }
@@ -121,20 +128,22 @@ interface UnusedSkipTokenEdenQueryOptionsIn<TQueryFnData, TData, TError>
 
 /**
  * Output options when skipToken is not used.
+ * Passes TQueryFnData and TData separately for proper type inference with select().
  */
-interface UnusedSkipTokenEdenQueryOptionsOut<TOutput, TError>
-	extends UnusedSkipTokenOptions<TOutput, TError, TOutput, EdenQueryKey>,
+interface UnusedSkipTokenEdenQueryOptionsOut<TQueryFnData, TData, TError>
+	extends UnusedSkipTokenOptions<TQueryFnData, TError, TData, EdenQueryKey>,
 		EdenQueryOptionsResult {
-	queryKey: DataTag<EdenQueryKey, TOutput, TError>
+	queryKey: DataTag<EdenQueryKey, TData, TError>
 }
 
 /**
  * Query options function type with overloads for different scenarios:
  * 1. With initialData - data is never undefined
- * 2. Without skipToken but no initialData
+ * 2. Without skipToken but no initialData (input required for proper overload resolution)
  * 3. With skipToken or undefined input
  *
- * Uses EmptyToVoid to make input optional when it's an empty object.
+ * Follows tRPC's pattern where the second overload has required input
+ * to help TypeScript properly select the right overload.
  */
 export interface EdenQueryOptions<TDef extends RouteDefinition> {
 	/**
@@ -148,20 +157,26 @@ export interface EdenQueryOptions<TDef extends RouteDefinition> {
 			TData,
 			EdenFetchError<number, TDef["error"]>
 		>,
-	): DefinedEdenQueryOptionsOut<TData, EdenFetchError<number, TDef["error"]>>
+	): DefinedEdenQueryOptionsOut<
+		TQueryFnData,
+		TData,
+		EdenFetchError<number, TDef["error"]>
+	>
 
 	/**
 	 * Create query options without skipToken.
+	 * Input is required (use void for routes without input).
 	 * The returned data can be undefined until loaded.
 	 */
 	<TQueryFnData extends TDef["output"], TData = TQueryFnData>(
-		input?: EmptyToVoid<TDef["input"]>,
+		input: EmptyToVoid<TDef["input"]>,
 		opts?: UnusedSkipTokenEdenQueryOptionsIn<
 			TQueryFnData,
 			TData,
 			EdenFetchError<number, TDef["error"]>
 		>,
 	): UnusedSkipTokenEdenQueryOptionsOut<
+		TQueryFnData,
 		TData,
 		EdenFetchError<number, TDef["error"]>
 	>
@@ -177,7 +192,11 @@ export interface EdenQueryOptions<TDef extends RouteDefinition> {
 			TData,
 			EdenFetchError<number, TDef["error"]>
 		>,
-	): UndefinedEdenQueryOptionsOut<TData, EdenFetchError<number, TDef["error"]>>
+	): UndefinedEdenQueryOptionsOut<
+		TQueryFnData,
+		TData,
+		EdenFetchError<number, TDef["error"]>
+	>
 }
 
 // ============================================================================
@@ -204,9 +223,10 @@ type EdenMutationOptionsIn<TInput, TError, TOutput, TContext> = Omit<
 /**
  * Output options for mutations.
  * mutationFn is guaranteed to be defined.
+ * Uses EmptyToVoid<TInput> so mutate() can be called without args when input is empty.
  */
 interface EdenMutationOptionsOut<TInput, TError, TOutput, TContext>
-	extends UseMutationOptions<TOutput, TError, TInput, TContext>,
+	extends UseMutationOptions<TOutput, TError, EmptyToVoid<TInput>, TContext>,
 		EdenQueryOptionsResult {
 	mutationKey: EdenMutationKey
 	mutationFn: EdenMutationFunction<TOutput, TInput>
@@ -268,7 +288,11 @@ export type EdenInfiniteQueryOptions<TDef extends RouteDefinition> = <
 		) => ExtractCursorType<TDef["input"]> | undefined
 		initialCursor?: ExtractCursorType<TDef["input"]>
 	} & EdenQueryBaseOptions,
-) => UndefinedEdenQueryOptionsOut<TData, EdenFetchError<number, TDef["error"]>>
+) => UndefinedEdenQueryOptionsOut<
+	TDef["output"],
+	TData,
+	EdenFetchError<number, TDef["error"]>
+>
 
 // ============================================================================
 // Procedure Decorators
