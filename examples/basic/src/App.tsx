@@ -13,10 +13,17 @@ function UserList() {
 
 	if (isLoading) return <div>Loading users...</div>
 	if (error) {
-		const message = typeof error.value === 'object' && error.value !== null && 'message' in error.value
-			? String(error.value.message)
-			: String(error.value)
-		return <div>Error ({error.status}): {message}</div>
+		const message =
+			typeof error.value === "object" &&
+			error.value !== null &&
+			"message" in error.value
+				? String(error.value.message)
+				: String(error.value)
+		return (
+			<div>
+				Error ({error.status}): {message}
+			</div>
+		)
 	}
 
 	return (

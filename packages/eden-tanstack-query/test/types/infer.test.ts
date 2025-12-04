@@ -471,15 +471,14 @@ describe("InferRouteError", () => {
 		type ErrorType = InferRouteError<RouteWithErrors>
 
 		// Should be a union of EdenFetchError types for 400, 404, 500
-		type Is400Error = EdenFetchError<400, { message: string; code: string }> extends ErrorType
-			? true
-			: false
-		type Is404Error = EdenFetchError<404, { message: string }> extends ErrorType
-			? true
-			: false
-		type Is500Error = EdenFetchError<500, { error: string }> extends ErrorType
-			? true
-			: false
+		type Is400Error =
+			EdenFetchError<400, { message: string; code: string }> extends ErrorType
+				? true
+				: false
+		type Is404Error =
+			EdenFetchError<404, { message: string }> extends ErrorType ? true : false
+		type Is500Error =
+			EdenFetchError<500, { error: string }> extends ErrorType ? true : false
 
 		const is400Error: Is400Error = true
 		const is404Error: Is404Error = true
@@ -536,7 +535,9 @@ describe("InferRouteError", () => {
 
 		// For routes with defined errors, we should be able to narrow and access message
 		type Error404 = Extract<ErrorType, { status: 404 }>
-		type ValueHasMessage = Error404["value"] extends { message: string } ? true : false
+		type ValueHasMessage = Error404["value"] extends { message: string }
+			? true
+			: false
 
 		const valueHasMessage: ValueHasMessage = true
 		expect(valueHasMessage).toBe(true)
