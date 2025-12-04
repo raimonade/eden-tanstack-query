@@ -1,15 +1,63 @@
 # eden-tanstack-query
 
-To install dependencies:
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+[![Tests](https://github.com/xkelxmc/eden-tanstack-query/actions/workflows/test.yml/badge.svg)](https://github.com/xkelxmc/eden-tanstack-query/actions/workflows/test.yml)
+
+Type-safe TanStack Query integration for Elysia Eden. Like @trpc/react-query, but for Elysia.
+
+## Packages
+
+| Package | Version | Size |
+|---------|---------|------|
+| [@eden-tanstack-query/react](./packages/eden-tanstack-query) | 0.1.0 | **Size:** 9.85 KB (gzipped: 2.44 KB) |
+
+## Quick Start
 
 ```bash
+bun add @eden-tanstack-query/react @tanstack/react-query @elysiajs/eden
+```
+
+```typescript
+import { createEdenTanStackQuery } from '@eden-tanstack-query/react'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import type { App } from './server'
+
+const { EdenProvider, useEden } = createEdenTanStackQuery<App>()
+
+function UserList() {
+  const eden = useEden()
+
+  // Fully typed queries
+  const { data: users } = useQuery(eden.users.get.queryOptions())
+
+  // Fully typed mutations
+  const createUser = useMutation(eden.users.post.mutationOptions())
+
+  return (/* ... */)
+}
+```
+
+See [full documentation](./packages/eden-tanstack-query/README.md) for details.
+
+## Development
+
+```bash
+# Install dependencies
 bun install
+
+# Run tests
+bun test
+
+# Build
+bun run build
+
+# Type check
+bun run test:types
 ```
 
-To run:
+## License
 
-```bash
-bun run index.ts
-```
+[Apache-2.0](./LICENSE)
 
-This project was created using `bun init` in bun v1.3.3. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+Copyright 2025 Ilya Zhidkov
