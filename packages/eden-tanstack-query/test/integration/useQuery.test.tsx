@@ -331,4 +331,153 @@ describe("useQuery integration", () => {
 			expect(result.current.data).toEqual({ id: "42", name: "User 42" })
 		})
 	})
+
+	describe("error handling", () => {
+		function createErrorMockClient() {
+			const mockClient = {
+				hello: {
+					get: async () => ({
+						data: null,
+						error: { status: 500, value: { message: "Internal Server Error" } },
+					}),
+				},
+				users: Object.assign(
+					(params: { id: string }) => ({
+						get: async () => ({
+							data: null,
+							error: {
+								status: 404,
+								value: { message: `User ${params.id} not found` },
+							},
+						}),
+					}),
+					{
+						get: async () => ({
+							data: null,
+							error: { status: 403, value: { message: "Forbidden" } },
+						}),
+					},
+				),
+			}
+			return mockClient as unknown as ReturnType<typeof treaty<App>>
+		}
+
+		function createErrorWrapper() {
+			const queryClient = new QueryClient({
+				defaultOptions: {
+					queries: {
+						retry: false,
+					},
+				},
+			})
+			const client = createErrorMockClient()
+
+			return {
+				queryClient,
+				client,
+				Wrapper: ({ children }: { children: ReactNode }) => (
+					<QueryClientProvider client={queryClient}>
+						<EdenProvider client={client} queryClient={queryClient}>
+							{children}
+						</EdenProvider>
+					</QueryClientProvider>
+				),
+			}
+		}
+
+		test("useQuery handles error state", async () => {
+			const { Wrapper } = createErrorWrapper()
+
+			const { result } = renderHook(
+				() => {
+					const eden = useEden()
+					return useQuery(eden.hello.get.queryOptions())
+				},
+				{ wrapper: Wrapper },
+			)
+
+			await waitFor(() => {
+				expect(result.current.isError).toBe(true)
+			})
+
+			expect(result.current.error).toBeDefined()
+		})
+
+		test("error type has status and value properties", async () => {
+			const { Wrapper } = createErrorWrapper()
+
+			const { result } = renderHook(
+				() => {
+					const eden = useEden()
+					const query = useQuery(eden.hello.get.queryOptions())
+
+					// CRITICAL: Compile-time type check for error shape
+					// EdenFetchError has status and value, NOT message
+					if (query.error) {
+						type ErrorType = typeof query.error
+						type HasStatus = "status" extends keyof ErrorType ? true : false
+						type HasValue = "value" extends keyof ErrorType ? true : false
+
+						const _hasStatus: HasStatus = true
+						const _hasValue: HasValue = true
+						void _hasStatus
+						void _hasValue
+					}
+
+					return query
+				},
+				{ wrapper: Wrapper },
+			)
+
+			await waitFor(() => {
+				expect(result.current.isError).toBe(true)
+			})
+
+			// Runtime check - error should have status and value
+			expect(result.current.error).toHaveProperty("status")
+			expect(result.current.error).toHaveProperty("value")
+		})
+
+		test("error.value contains error details", async () => {
+			const { Wrapper } = createErrorWrapper()
+
+			const { result } = renderHook(
+				() => {
+					const eden = useEden()
+					return useQuery(eden.hello.get.queryOptions())
+				},
+				{ wrapper: Wrapper },
+			)
+
+			await waitFor(() => {
+				expect(result.current.isError).toBe(true)
+			})
+
+			expect(result.current.error?.status).toBe(500)
+			expect(result.current.error?.value).toEqual({
+				message: "Internal Server Error",
+			})
+		})
+
+		test("error with path params contains correct error", async () => {
+			const { Wrapper } = createErrorWrapper()
+
+			const { result } = renderHook(
+				() => {
+					const eden = useEden()
+					return useQuery(eden.users({ id: "999" }).get.queryOptions())
+				},
+				{ wrapper: Wrapper },
+			)
+
+			await waitFor(() => {
+				expect(result.current.isError).toBe(true)
+			})
+
+			expect(result.current.error?.status).toBe(404)
+			expect(result.current.error?.value).toEqual({
+				message: "User 999 not found",
+			})
+		})
+	})
 })

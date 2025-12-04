@@ -346,4 +346,166 @@ describe("useMutation integration", () => {
 			expect(typeof result.current.mutationFn).toBe("function")
 		})
 	})
+
+	describe("error handling", () => {
+		function createErrorMockClient() {
+			const mockClient = {
+				users: Object.assign(
+					(params: { id: string }) => ({
+						put: async () => ({
+							data: null,
+							error: {
+								status: 404,
+								value: { message: `User ${params.id} not found` },
+							},
+						}),
+						delete: async () => ({
+							data: null,
+							error: { status: 403, value: { message: "Cannot delete user" } },
+						}),
+					}),
+					{
+						post: async () => ({
+							data: null,
+							error: {
+								status: 400,
+								value: {
+									message: "Validation failed",
+									errors: ["email is required"],
+								},
+							},
+						}),
+					},
+				),
+			}
+			return mockClient as unknown as ReturnType<typeof treaty<App>>
+		}
+
+		function createErrorWrapper() {
+			const queryClient = new QueryClient({
+				defaultOptions: {
+					mutations: {
+						retry: false,
+					},
+				},
+			})
+			const client = createErrorMockClient()
+
+			return {
+				queryClient,
+				client,
+				Wrapper: ({ children }: { children: ReactNode }) => (
+					<QueryClientProvider client={queryClient}>
+						<EdenProvider client={client} queryClient={queryClient}>
+							{children}
+						</EdenProvider>
+					</QueryClientProvider>
+				),
+			}
+		}
+
+		test("useMutation handles error state", async () => {
+			const { Wrapper } = createErrorWrapper()
+
+			const { result } = renderHook(
+				() => {
+					const eden = useEden()
+					return useMutation(eden.users.post.mutationOptions())
+				},
+				{ wrapper: Wrapper },
+			)
+
+			result.current.mutate({ name: "Test", email: "test@example.com" })
+
+			await waitFor(() => {
+				expect(result.current.isError).toBe(true)
+			})
+
+			expect(result.current.error).toBeDefined()
+		})
+
+		test("error type has status and value properties", async () => {
+			const { Wrapper } = createErrorWrapper()
+
+			const { result } = renderHook(
+				() => {
+					const eden = useEden()
+					const mutation = useMutation(eden.users.post.mutationOptions())
+
+					// CRITICAL: Compile-time type check for error shape
+					// EdenFetchError has status and value, NOT message
+					if (mutation.error) {
+						type ErrorType = typeof mutation.error
+						type HasStatus = "status" extends keyof ErrorType ? true : false
+						type HasValue = "value" extends keyof ErrorType ? true : false
+
+						const _hasStatus: HasStatus = true
+						const _hasValue: HasValue = true
+						void _hasStatus
+						void _hasValue
+					}
+
+					return mutation
+				},
+				{ wrapper: Wrapper },
+			)
+
+			result.current.mutate({ name: "Test", email: "test@example.com" })
+
+			await waitFor(() => {
+				expect(result.current.isError).toBe(true)
+			})
+
+			// Runtime check - error should have status and value
+			expect(result.current.error).toHaveProperty("status")
+			expect(result.current.error).toHaveProperty("value")
+		})
+
+		test("error.value contains validation errors", async () => {
+			const { Wrapper } = createErrorWrapper()
+
+			const { result } = renderHook(
+				() => {
+					const eden = useEden()
+					return useMutation(eden.users.post.mutationOptions())
+				},
+				{ wrapper: Wrapper },
+			)
+
+			result.current.mutate({ name: "Test", email: "test@example.com" })
+
+			await waitFor(() => {
+				expect(result.current.isError).toBe(true)
+			})
+
+			expect(result.current.error?.status).toBe(400)
+			expect(result.current.error?.value).toEqual({
+				message: "Validation failed",
+				errors: ["email is required"],
+			})
+		})
+
+		test("error with path params mutation", async () => {
+			const { Wrapper } = createErrorWrapper()
+
+			const { result } = renderHook(
+				() => {
+					const eden = useEden()
+					return useMutation(eden.users({ id: "999" }).put.mutationOptions())
+				},
+				{ wrapper: Wrapper },
+			)
+
+			result.current.mutate({ name: "Test", email: "test@example.com" })
+
+			await waitFor(() => {
+				expect(result.current.isError).toBe(true)
+			})
+
+			expect(result.current.error?.status).toBe(404)
+			expect(result.current.error?.value).toEqual({
+				message: "User 999 not found",
+			})
+		})
+	})
 })

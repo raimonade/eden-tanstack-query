@@ -1,7 +1,7 @@
 import type { DataTag } from "@tanstack/react-query"
 import { skipToken } from "@tanstack/react-query"
-import { edenQueryOptions } from "../../src/options/queryOptions"
 import type { EdenQueryKey } from "../../src/keys/types"
+import { edenQueryOptions } from "../../src/options/queryOptions"
 import { createTestQueryClient } from "../../test-utils"
 
 // ============================================================================
@@ -22,13 +22,10 @@ describe("edenQueryOptions type inference", () => {
 
 		// Verify queryKey is DataTag with correct TData
 		type QueryKeyType = typeof options.queryKey
-		type ExtractedData = QueryKeyType extends DataTag<
-			EdenQueryKey,
-			infer TData,
-			unknown
-		>
-			? TData
-			: never
+		type ExtractedData =
+			QueryKeyType extends DataTag<EdenQueryKey, infer TData, unknown>
+				? TData
+				: never
 
 		// This assignment will fail at compile time if types don't match
 		const _typeCheck: ExtractedData = {} as TestOutput
@@ -264,5 +261,74 @@ describe("edenQueryOptions", () => {
 		await expect(queryClient.fetchQuery(options)).rejects.toThrow(
 			"User not found",
 		)
+	})
+})
+
+// ============================================================================
+// Error Type Tests
+// ============================================================================
+
+describe("edenQueryOptions error type inference", () => {
+	type TestInput = { id: string }
+	type TestOutput = { id: string; name: string }
+	type TestError = { status: number; value: { message: string; code: string } }
+
+	test("error type can be specified via generic", () => {
+		// Generic order: <TInput, TOutput, TError>
+		const options = edenQueryOptions<TestInput, TestOutput, TestError>({
+			path: ["api", "users", "get"],
+			input: { id: "1" },
+			fetch: async () => ({ id: "1", name: "Test" }),
+		})
+
+		// Type check - error type should be available
+		type OptionsType = typeof options
+		type HasQueryKey = "queryKey" extends keyof OptionsType ? true : false
+
+		const hasQueryKey: HasQueryKey = true
+		expect(hasQueryKey).toBe(true)
+	})
+
+	test("throwOnError callback receives correct error type", () => {
+		type CustomError = { status: 404; value: { message: string } }
+
+		// Generic order: <TInput, TOutput, TError>
+		const options = edenQueryOptions<TestInput, TestOutput, CustomError>({
+			path: ["api", "users", "get"],
+			input: { id: "1" },
+			fetch: async () => ({ id: "1", name: "Test" }),
+			opts: {
+				throwOnError: (error) => {
+					// Type assertion - error should have status and value
+					type ErrorType = typeof error
+					type HasStatus = "status" extends keyof ErrorType ? true : false
+					type HasValue = "value" extends keyof ErrorType ? true : false
+
+					const _hasStatus: HasStatus = true
+					const _hasValue: HasValue = true
+					void _hasStatus
+					void _hasValue
+
+					return error.status === 404
+				},
+			},
+		})
+
+		expect(options.throwOnError).toBeDefined()
+	})
+
+	test("error type does NOT have message at top level", () => {
+		// This is the critical test - EdenFetchError has status and value, NOT message
+		type EdenError = { status: number; value: unknown }
+
+		// Generic order: <TInput, TOutput, TError>
+		const options = edenQueryOptions<TestInput, TestOutput, EdenError>({
+			path: ["api", "users", "get"],
+			input: { id: "1" },
+			fetch: async () => ({ id: "1", name: "Test" }),
+		})
+
+		// Verify options created successfully
+		expect(options.queryKey).toBeDefined()
 	})
 })

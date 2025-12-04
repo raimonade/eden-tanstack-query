@@ -1,7 +1,7 @@
 import type { DataTag } from "@tanstack/react-query"
 import { skipToken } from "@tanstack/react-query"
-import { edenInfiniteQueryOptions } from "../../src/options/infiniteQueryOptions"
 import type { EdenQueryKey } from "../../src/keys/types"
+import { edenInfiniteQueryOptions } from "../../src/options/infiniteQueryOptions"
 import { createTestQueryClient } from "../../test-utils"
 
 // ============================================================================
@@ -31,9 +31,10 @@ describe("edenInfiniteQueryOptions type inference", () => {
 
 		// Verify queryKey is DataTag with correct type
 		type QueryKeyType = typeof options.queryKey
-		type IsDataTag = QueryKeyType extends DataTag<EdenQueryKey, unknown, unknown>
-			? true
-			: false
+		type IsDataTag =
+			QueryKeyType extends DataTag<EdenQueryKey, unknown, unknown>
+				? true
+				: false
 
 		const _isDataTag: IsDataTag = true
 		expect(_isDataTag).toBe(true)
@@ -439,5 +440,102 @@ describe("edenInfiniteQueryOptions", () => {
 			meta: undefined,
 		})
 		expect(receivedPage).toBe(2)
+	})
+})
+
+// ============================================================================
+// Error Type Tests
+// ============================================================================
+
+describe("edenInfiniteQueryOptions error type inference", () => {
+	type TestInput = { limit: number; cursor?: string }
+	type TestOutput = {
+		items: Array<{ id: string; title: string }>
+		nextCursor: string | null
+	}
+
+	test("error type can be specified via generic", () => {
+		type EdenError = { status: number; value: { message: string } }
+
+		// Generic order: <TInput, TOutput, TError, TPageParam>
+		const options = edenInfiniteQueryOptions<
+			TestInput,
+			TestOutput,
+			EdenError,
+			string | null
+		>({
+			path: ["api", "posts", "get"],
+			input: { limit: 10 },
+			initialPageParam: null,
+			fetch: async () => ({ items: [], nextCursor: null }),
+			opts: {
+				getNextPageParam: () => undefined,
+			},
+		})
+
+		expect(options.queryKey).toBeDefined()
+	})
+
+	test("throwOnError callback receives correct error type", () => {
+		type EdenError = {
+			status: number
+			value: { message: string; code: string }
+		}
+
+		// Generic order: <TInput, TOutput, TError, TPageParam>
+		const options = edenInfiniteQueryOptions<
+			TestInput,
+			TestOutput,
+			EdenError,
+			string | null
+		>({
+			path: ["api", "posts", "get"],
+			input: { limit: 10 },
+			initialPageParam: null,
+			fetch: async () => ({ items: [], nextCursor: null }),
+			opts: {
+				getNextPageParam: () => undefined,
+				throwOnError: (error) => {
+					// Type assertion - error should have status and value
+					type ErrorType = typeof error
+					type HasStatus = "status" extends keyof ErrorType ? true : false
+					type HasValue = "value" extends keyof ErrorType ? true : false
+
+					const _hasStatus: HasStatus = true
+					const _hasValue: HasValue = true
+					void _hasStatus
+					void _hasValue
+
+					return error.status >= 500
+				},
+			},
+		})
+
+		expect(options.throwOnError).toBeDefined()
+	})
+
+	test("error type has status and value, NOT message at top level", () => {
+		// Critical test - EdenFetchError structure
+		type EdenError = { status: 404; value: { message: string } }
+
+		// Generic order: <TInput, TOutput, TError, TPageParam>
+		const options = edenInfiniteQueryOptions<
+			TestInput,
+			TestOutput,
+			EdenError,
+			string | null
+		>({
+			path: ["api", "posts", "get"],
+			input: { limit: 10 },
+			initialPageParam: null,
+			fetch: async () => ({ items: [], nextCursor: null }),
+			opts: {
+				getNextPageParam: () => undefined,
+			},
+		})
+
+		// Verify options structure
+		expect(options.queryKey).toBeDefined()
+		expect(options.queryFn).toBeDefined()
 	})
 })

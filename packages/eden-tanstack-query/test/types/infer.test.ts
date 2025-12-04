@@ -7,11 +7,13 @@
 import { Elysia, t } from "elysia"
 
 import type {
+	EdenFetchError,
 	ExtractPathParams,
 	ExtractRoutes,
 	HttpMutationMethod,
 	HttpQueryMethod,
 	InferRouteBody,
+	InferRouteError,
 	InferRouteInput,
 	InferRouteOutput,
 	InferRouteParams,
@@ -331,5 +333,212 @@ describe("RouteSchema Type Extraction", () => {
 			expect(hasDeleted).toBe(true)
 			expect(hasId).toBe(true)
 		})
+	})
+})
+
+// ============================================================================
+// EdenFetchError Type Tests
+// ============================================================================
+
+describe("EdenFetchError", () => {
+	test("has status property", () => {
+		type Error = EdenFetchError<500, { message: string }>
+		type HasStatus = "status" extends keyof Error ? true : false
+
+		const hasStatus: HasStatus = true
+		expect(hasStatus).toBe(true)
+	})
+
+	test("has value property", () => {
+		type Error = EdenFetchError<500, { message: string }>
+		type HasValue = "value" extends keyof Error ? true : false
+
+		const hasValue: HasValue = true
+		expect(hasValue).toBe(true)
+	})
+
+	test("does NOT have message property", () => {
+		type Error = EdenFetchError<500, { message: string }>
+		type HasMessage = "message" extends keyof Error ? true : false
+
+		// CRITICAL: EdenFetchError should NOT have message at top level
+		// message is inside value, not on the error itself
+		const hasMessage: HasMessage = false
+		expect(hasMessage).toBe(false)
+	})
+
+	test("status is typed number", () => {
+		type Error = EdenFetchError<404, unknown>
+		type StatusType = Error["status"]
+		type IsNumber = StatusType extends number ? true : false
+
+		const isNumber: IsNumber = true
+		expect(isNumber).toBe(true)
+	})
+
+	test("status can be specific status code", () => {
+		type Error = EdenFetchError<404, unknown>
+		type StatusType = Error["status"]
+		type Is404 = StatusType extends 404 ? true : false
+
+		const is404: Is404 = true
+		expect(is404).toBe(true)
+	})
+
+	test("value is typed", () => {
+		type ErrorValue = { code: string; details: string[] }
+		type Error = EdenFetchError<400, ErrorValue>
+		type ValueType = Error["value"]
+		type IsCorrect = ValueType extends ErrorValue ? true : false
+
+		const isCorrect: IsCorrect = true
+		expect(isCorrect).toBe(true)
+	})
+
+	test("default generic parameters", () => {
+		type Error = EdenFetchError
+		type StatusIsNumber = Error["status"] extends number ? true : false
+		type ValueIsUnknown = unknown extends Error["value"] ? true : false
+
+		const statusIsNumber: StatusIsNumber = true
+		const valueIsUnknown: ValueIsUnknown = true
+
+		expect(statusIsNumber).toBe(true)
+		expect(valueIsUnknown).toBe(true)
+	})
+
+	test("value can contain nested error structure", () => {
+		type NestedError = {
+			message: string
+			errors: Array<{ field: string; reason: string }>
+		}
+		type Error = EdenFetchError<422, NestedError>
+
+		// Access nested properties through value
+		type ValueHasMessage = Error["value"] extends { message: string }
+			? true
+			: false
+		type ValueHasErrors = Error["value"] extends { errors: unknown[] }
+			? true
+			: false
+
+		const valueHasMessage: ValueHasMessage = true
+		const valueHasErrors: ValueHasErrors = true
+
+		expect(valueHasMessage).toBe(true)
+		expect(valueHasErrors).toBe(true)
+	})
+})
+
+// ============================================================================
+// InferRouteError Type Tests
+// ============================================================================
+
+describe("InferRouteError", () => {
+	// Test route schema types
+	type RouteWithErrors = {
+		body: unknown
+		params: unknown
+		query: unknown
+		headers: unknown
+		response: {
+			200: { data: string }
+			400: { message: string; code: string }
+			404: { message: string }
+			500: { error: string }
+		}
+	}
+
+	type RouteWithOnlySuccess = {
+		body: unknown
+		params: unknown
+		query: unknown
+		headers: unknown
+		response: {
+			200: { data: string }
+		}
+	}
+
+	type RouteWithNoResponse = {
+		body: unknown
+		params: unknown
+		query: unknown
+		headers: unknown
+		response: unknown
+	}
+
+	test("extracts error types from route with defined errors", () => {
+		type ErrorType = InferRouteError<RouteWithErrors>
+
+		// Should be a union of EdenFetchError types for 400, 404, 500
+		type Is400Error = EdenFetchError<400, { message: string; code: string }> extends ErrorType
+			? true
+			: false
+		type Is404Error = EdenFetchError<404, { message: string }> extends ErrorType
+			? true
+			: false
+		type Is500Error = EdenFetchError<500, { error: string }> extends ErrorType
+			? true
+			: false
+
+		const is400Error: Is400Error = true
+		const is404Error: Is404Error = true
+		const is500Error: Is500Error = true
+
+		expect(is400Error).toBe(true)
+		expect(is404Error).toBe(true)
+		expect(is500Error).toBe(true)
+	})
+
+	test("error type is NOT never when route has only success responses", () => {
+		type ErrorType = InferRouteError<RouteWithOnlySuccess>
+
+		// CRITICAL: Error should NOT be never - should default to EdenFetchError<number, unknown>
+		type IsNotNever = IsNever<ErrorType> extends true ? false : true
+
+		const isNotNever: IsNotNever = true
+		expect(isNotNever).toBe(true)
+	})
+
+	test("error.value is NOT never when route has only success responses", () => {
+		type ErrorType = InferRouteError<RouteWithOnlySuccess>
+
+		// The value type should be accessible (not never)
+		type HasStatus = ErrorType extends { status: number } ? true : false
+		type HasValue = ErrorType extends { value: unknown } ? true : false
+
+		const hasStatus: HasStatus = true
+		const hasValue: HasValue = true
+
+		expect(hasStatus).toBe(true)
+		expect(hasValue).toBe(true)
+	})
+
+	test("error defaults to EdenFetchError<number, unknown> when no response defined", () => {
+		type ErrorType = InferRouteError<RouteWithNoResponse>
+
+		// Should default to generic error type
+		type IsNotNever = IsNever<ErrorType> extends true ? false : true
+		type HasStatus = ErrorType extends { status: number } ? true : false
+		type HasValue = ErrorType extends { value: unknown } ? true : false
+
+		const isNotNever: IsNotNever = true
+		const hasStatus: HasStatus = true
+		const hasValue: HasValue = true
+
+		expect(isNotNever).toBe(true)
+		expect(hasStatus).toBe(true)
+		expect(hasValue).toBe(true)
+	})
+
+	test("error.value.message is accessible when error defines message", () => {
+		type ErrorType = InferRouteError<RouteWithErrors>
+
+		// For routes with defined errors, we should be able to narrow and access message
+		type Error404 = Extract<ErrorType, { status: 404 }>
+		type ValueHasMessage = Error404["value"] extends { message: string } ? true : false
+
+		const valueHasMessage: ValueHasMessage = true
+		expect(valueHasMessage).toBe(true)
 	})
 })

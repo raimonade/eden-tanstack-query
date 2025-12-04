@@ -1,5 +1,5 @@
-import { edenMutationOptions } from "../../src/options/mutationOptions"
 import type { EdenMutationKey } from "../../src/keys/types"
+import { edenMutationOptions } from "../../src/options/mutationOptions"
 import { createTestQueryClient } from "../../test-utils"
 
 // ============================================================================
@@ -233,5 +233,108 @@ describe("edenMutationOptions", () => {
 		expect(options.mutationKey).toEqual([["api", "users", "post"]])
 		expect(typeof options.mutationFn).toBe("function")
 		expect(typeof options.onMutate).toBe("function")
+	})
+})
+
+// ============================================================================
+// Error Type Tests
+// ============================================================================
+
+describe("edenMutationOptions error type inference", () => {
+	type TestInput = { name: string; email: string }
+	type TestOutput = { id: string; name: string; email: string }
+
+	test("error type can be specified via generic", () => {
+		type CustomError = { status: number; value: { message: string } }
+
+		const options = edenMutationOptions<
+			TestInput,
+			TestOutput,
+			CustomError,
+			unknown
+		>({
+			path: ["api", "users", "post"],
+			mutate: async (input) => ({ id: "1", ...input }),
+		})
+
+		// Verify options created
+		expect(options.mutationKey).toBeDefined()
+	})
+
+	test("onError callback receives correct error type", () => {
+		type EdenError = {
+			status: number
+			value: { message: string; code: string }
+		}
+
+		const options = edenMutationOptions<TestInput, TestOutput, EdenError>({
+			path: ["api", "users", "post"],
+			mutate: async (input) => ({ id: "1", ...input }),
+			opts: {
+				onError: (error) => {
+					// Type assertion - error should have status and value
+					type ErrorType = typeof error
+					type HasStatus = "status" extends keyof ErrorType ? true : false
+					type HasValue = "value" extends keyof ErrorType ? true : false
+
+					const _hasStatus: HasStatus = true
+					const _hasValue: HasValue = true
+					void _hasStatus
+					void _hasValue
+
+					// Access error properties
+					console.log(error.status, error.value)
+				},
+			},
+		})
+
+		expect(options.onError).toBeDefined()
+	})
+
+	test("error type has status and value, NOT message at top level", () => {
+		// Critical test - EdenFetchError structure
+		type EdenError = {
+			status: 400
+			value: { message: string; errors: string[] }
+		}
+
+		const options = edenMutationOptions<TestInput, TestOutput, EdenError>({
+			path: ["api", "users", "post"],
+			mutate: async (input) => ({ id: "1", ...input }),
+			opts: {
+				onError: (error, variables, context) => {
+					// error.status exists
+					const _status: number = error.status
+					void _status
+
+					// error.value exists and contains the actual error data
+					const _value: { message: string; errors: string[] } = error.value
+					void _value
+
+					// These are also available
+					void variables
+					void context
+				},
+			},
+		})
+
+		expect(options.onError).toBeDefined()
+	})
+
+	test("throwOnError receives correct error type", () => {
+		type EdenError = { status: number; value: unknown }
+
+		const options = edenMutationOptions<TestInput, TestOutput, EdenError>({
+			path: ["api", "users", "post"],
+			mutate: async (input) => ({ id: "1", ...input }),
+			opts: {
+				throwOnError: (error) => {
+					// error should have status and value
+					return error.status >= 500
+				},
+			},
+		})
+
+		expect(options.throwOnError).toBeDefined()
 	})
 })
