@@ -3,17 +3,17 @@ import { Elysia, t } from "elysia"
 
 const app = new Elysia()
 	.use(cors())
-	.get("/api/hello", () => ({ message: "Hello from Elysia!" }))
-	.get("/api/users", () => [
+	.get("/hello", () => ({ message: "Hello from Elysia!" }))
+	.get("/users", () => [
 		{ id: "1", name: "Alice" },
 		{ id: "2", name: "Bob" },
 	])
-	.get("/api/users/:id", ({ params }) => ({
+	.get("/users/:id", ({ params }) => ({
 		id: params.id,
 		name: `User ${params.id}`,
 	}))
 	.post(
-		"/api/users",
+		"/users",
 		({ body }) => ({
 			id: String(Date.now()),
 			...body,
