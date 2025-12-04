@@ -53,7 +53,7 @@ export interface CreateEdenContextResult<TApp extends AnyElysia> {
  *
  * @example
  * ```tsx
- * import { createEdenContext } from '@eden-tanstack-query/react'
+ * import { createEdenContext } from 'eden-tanstack-react-query'
  * import type { App } from './server'
  *
  * const { EdenProvider, useEden, useEdenClient } = createEdenContext<App>()

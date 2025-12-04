@@ -33,7 +33,7 @@ export interface CreateEdenTanStackQueryResult<TApp extends AnyElysia>
  * ```tsx
  * import { treaty } from '@elysiajs/eden'
  * import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
- * import { createEdenTanStackQuery } from '@eden-tanstack-query/react'
+ * import { createEdenTanStackQuery } from 'eden-tanstack-react-query'
  * import type { App } from './server'
  *
  * // Create typed hooks and provider

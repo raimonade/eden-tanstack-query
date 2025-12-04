@@ -1,4 +1,4 @@
-# @eden-tanstack-query/react
+# eden-tanstack-react-query
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
@@ -20,7 +20,7 @@ Type-safe TanStack Query integration for Elysia Eden. Like @trpc/react-query, bu
 ## 📦 Installation
 
 ```bash
-bun add @eden-tanstack-query/react @tanstack/react-query @elysiajs/eden
+bun add eden-tanstack-react-query @tanstack/react-query @elysiajs/eden
 ```
 
 ## 🚀 Quick Start
@@ -55,7 +55,7 @@ export type App = typeof app
 
 ```typescript
 // lib/eden.ts
-import { createEdenTanStackQuery } from '@eden-tanstack-query/react'
+import { createEdenTanStackQuery } from 'eden-tanstack-react-query'
 import { treaty } from '@elysiajs/eden'
 import type { App } from './server'
 
@@ -198,7 +198,7 @@ eden.users.get.queryOptions({
 
 ## 🔄 Comparison
 
-| Feature | @eden-tanstack-query/react | eden-query |
+| Feature | eden-tanstack-react-query | eden-query |
 |---------|---------------------------|------------|
 | API Style | `useQuery(eden.users.get.queryOptions())` | `eden.users.get.useQuery()` |
 | TanStack Query Native | ✅ Standard hooks | ❌ Custom wrappers |

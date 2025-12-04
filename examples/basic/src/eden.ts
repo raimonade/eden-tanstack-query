@@ -1,5 +1,5 @@
-import { createEdenTanStackQuery } from "@eden-tanstack-query/react"
 import { treaty } from "@elysiajs/eden"
+import { createEdenTanStackQuery } from "eden-tanstack-react-query"
 import type { App } from "../server"
 
 // Create typed hooks and provider

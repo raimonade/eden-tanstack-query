@@ -1,4 +1,4 @@
-// @eden-tanstack-query/react
+// eden-tanstack-react-query
 // TanStack Query integration for Elysia Eden
 
 // React context

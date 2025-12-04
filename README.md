@@ -10,16 +10,16 @@ Type-safe TanStack Query integration for Elysia Eden. Like @trpc/react-query, bu
 
 | Package | Version | Size |
 |---------|---------|------|
-| [@eden-tanstack-query/react](./packages/eden-tanstack-query) | 0.1.0 | **Size:** 9.85 KB (gzipped: 2.44 KB) |
+| [eden-tanstack-react-query](./packages/eden-tanstack-query) | 0.1.0 | **Size:** 9.85 KB (gzipped: 2.44 KB) |
 
 ## Quick Start
 
 ```bash
-bun add @eden-tanstack-query/react @tanstack/react-query @elysiajs/eden
+bun add eden-tanstack-react-query @tanstack/react-query @elysiajs/eden
 ```
 
 ```typescript
-import { createEdenTanStackQuery } from '@eden-tanstack-query/react'
+import { createEdenTanStackQuery } from 'eden-tanstack-react-query'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import type { App } from './server'
 
