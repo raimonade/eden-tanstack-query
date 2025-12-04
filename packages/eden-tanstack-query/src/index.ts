@@ -11,6 +11,14 @@ export type {
 	EdenQueryKeyMeta,
 	QueryType,
 } from "./keys/types"
+export type {
+	EdenMutationOptionsArgs,
+	EdenMutationOptionsIn,
+	EdenMutationOptionsOut,
+	EdenMutationOptionsResult,
+} from "./options/mutationOptions"
+// Mutation options factory
+export { edenMutationOptions } from "./options/mutationOptions"
 // Query options factory
 export { edenQueryOptions } from "./options/queryOptions"
 
