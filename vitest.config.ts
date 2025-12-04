@@ -7,5 +7,17 @@ export default defineConfig({
 		setupFiles: [
 			"./packages/eden-tanstack-query/test-utils/testing-library.ts",
 		],
+		coverage: {
+			enabled: true,
+			provider: "v8",
+			reporter: ["text", "html"],
+			include: ["packages/eden-tanstack-query/src/**/*.ts"],
+			exclude: [
+				"**/node_modules/**",
+				"**/dist/**",
+				"**/test/**",
+				"**/test-utils/**",
+			],
+		},
 	},
 })

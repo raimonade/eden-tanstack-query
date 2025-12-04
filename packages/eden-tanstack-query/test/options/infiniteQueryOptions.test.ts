@@ -93,9 +93,9 @@ describe("edenInfiniteQueryOptions type inference", () => {
 			path: ["api", "posts", "get"],
 			input: { limit: 10 },
 			initialPageParam: null as string | null,
-			fetch: async (input) => {
+			fetch: async (_input) => {
 				// Input should include cursor from pageParam
-				type InputType = typeof input
+				type InputType = typeof _input
 				type HasCursor = "cursor" extends keyof InputType ? true : false
 				const _hasCursor: HasCursor = true
 				void _hasCursor

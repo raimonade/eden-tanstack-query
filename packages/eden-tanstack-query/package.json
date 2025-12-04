@@ -17,7 +17,7 @@
 	],
 	"scripts": {
 		"build": "bun run build:js && bun run build:types",
-		"build:js": "bun build ./src/index.ts --outdir ./dist --target browser --format esm --external react --external @tanstack/react-query --external @elysiajs/eden --external elysia",
+		"build:js": "bun build ./src/index.ts --outdir ./dist --target browser --format esm --sourcemap=external --external react --external @tanstack/react-query --external @elysiajs/eden --external elysia",
 		"build:types": "bunx tsc -p tsconfig.build.json",
 		"dev": "bun run build --watch",
 		"test": "bun test --preload ./test-utils/happydom.ts",
@@ -51,5 +51,12 @@
 		"typescript",
 		"type-safe"
 	],
-	"license": "MIT"
+	"author": "Ilya Zhidkov",
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/xkelxmc/eden-tanstack-query.git",
+		"directory": "packages/eden-tanstack-query"
+	},
+	"homepage": "https://github.com/xkelxmc/eden-tanstack-query#readme"
 }
