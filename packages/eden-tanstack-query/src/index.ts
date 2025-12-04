@@ -1,6 +1,9 @@
 // @eden-tanstack-query/react
 // TanStack Query integration for Elysia Eden
 
+export type { GetMutationKeyOptions, GetQueryKeyOptions } from "./keys/queryKey"
+// Query key generation
+export { getMutationKey, getQueryKey } from "./keys/queryKey"
 // Query key types
 export type {
 	EdenMutationKey,
@@ -8,6 +11,8 @@ export type {
 	EdenQueryKeyMeta,
 	QueryType,
 } from "./keys/types"
+// Query options factory
+export { edenQueryOptions } from "./options/queryOptions"
 
 // Route type inference utilities
 export type {
