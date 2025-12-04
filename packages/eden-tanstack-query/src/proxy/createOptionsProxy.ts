@@ -1,0 +1,358 @@
+/**
+ * Options Proxy Creation
+ *
+ * Creates a recursive proxy that decorates Eden routes with TanStack Query options.
+ * Transforms Eden Treaty client paths into queryOptions/mutationOptions factories.
+ */
+import type { QueryClient, QueryFilters } from "@tanstack/react-query"
+
+import { getMutationKey, getQueryKey } from "../keys/queryKey"
+import type { EdenMutationKey, EdenQueryKey } from "../keys/types"
+import { edenInfiniteQueryOptions } from "../options/infiniteQueryOptions"
+import { edenMutationOptions } from "../options/mutationOptions"
+import { edenQueryOptions } from "../options/queryOptions"
+
+// ============================================================================
+// Types
+// ============================================================================
+
+/** HTTP methods that map to queries */
+const QUERY_METHODS = ["get", "options", "head"] as const
+
+/** HTTP methods that map to mutations */
+const MUTATION_METHODS = ["post", "put", "patch", "delete"] as const
+
+type QueryMethod = (typeof QUERY_METHODS)[number]
+type MutationMethod = (typeof MUTATION_METHODS)[number]
+
+/** Options for creating the proxy */
+export interface CreateEdenOptionsProxyOptions<TClient> {
+	/** Eden Treaty client instance */
+	client: TClient
+	/** QueryClient instance or getter function */
+	queryClient: QueryClient | (() => QueryClient)
+}
+
+/** Helper to make some properties required */
+type WithRequired<TObj, TKey extends keyof TObj> = TObj & {
+	[P in TKey]-?: TObj[P]
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Check if a property name is a query method
+ */
+function isQueryMethod(prop: string): prop is QueryMethod {
+	return (QUERY_METHODS as readonly string[]).includes(prop)
+}
+
+/**
+ * Check if a property name is a mutation method
+ */
+function isMutationMethod(prop: string): prop is MutationMethod {
+	return (MUTATION_METHODS as readonly string[]).includes(prop)
+}
+
+/**
+ * Get the last element of paths array (the HTTP method)
+ */
+function getMethod(paths: string[]): string {
+	const method = paths.at(-1)
+	if (!method) {
+		throw new Error("Path must contain at least one segment")
+	}
+	return method
+}
+
+/**
+ * Navigate to the correct Eden client path with path params applied
+ */
+function navigateToEdenPath(
+	client: unknown,
+	pathSegments: string[],
+	pathParams: Record<string, unknown>[],
+): unknown {
+	let edenPath = client
+
+	// Apply path segments and params
+	// Path params are applied when we encounter them in the path
+	let paramIndex = 0
+
+	for (const segment of pathSegments) {
+		// Navigate to next segment
+		edenPath = (edenPath as Record<string, unknown>)[segment]
+
+		// If there's a path param to apply at this level, call as function
+		if (
+			paramIndex < pathParams.length &&
+			typeof edenPath === "function" &&
+			!isQueryMethod(segment) &&
+			!isMutationMethod(segment)
+		) {
+			edenPath = (edenPath as (params: unknown) => unknown)(
+				pathParams[paramIndex],
+			)
+			paramIndex++
+		}
+	}
+
+	return edenPath
+}
+
+// ============================================================================
+// Query Procedure
+// ============================================================================
+
+interface QueryProcedureOptions {
+	client: unknown
+	queryClient: QueryClient | (() => QueryClient)
+	paths: string[]
+	pathParams: Record<string, unknown>[]
+}
+
+/**
+ * Creates query procedure methods (queryOptions, queryKey, queryFilter, infiniteQueryOptions)
+ */
+function createQueryProcedure(opts: QueryProcedureOptions) {
+	const { client, paths, pathParams } = opts
+
+	return {
+		queryOptions: (input?: unknown, queryOpts?: unknown) => {
+			return edenQueryOptions({
+				path: paths,
+				input,
+				fetch: async (actualInput, signal) => {
+					// Build path without the method
+					const pathWithoutMethod = paths.slice(0, -1)
+					const method = getMethod(paths)
+
+					// Navigate to the endpoint
+					const edenEndpoint = navigateToEdenPath(
+						client,
+						pathWithoutMethod,
+						pathParams,
+					)
+
+					// Call the method
+					const methodFn = (edenEndpoint as Record<string, unknown>)[
+						method
+					] as (opts: unknown) => Promise<{ data: unknown; error: unknown }>
+
+					const result = await methodFn({
+						query: actualInput,
+						fetch: { signal },
+					})
+
+					if (result.error) throw result.error
+					return result.data
+				},
+				opts: queryOpts as Parameters<typeof edenQueryOptions>[0]["opts"],
+			})
+		},
+
+		queryKey: (input?: unknown): EdenQueryKey => {
+			return getQueryKey({ path: paths, input, type: "query" })
+		},
+
+		queryFilter: (
+			input?: unknown,
+			filters?: QueryFilters,
+		): WithRequired<QueryFilters, "queryKey"> => {
+			return {
+				...filters,
+				queryKey: getQueryKey({ path: paths, input, type: "any" }),
+			}
+		},
+
+		infiniteQueryOptions: (
+			input: unknown,
+			infiniteOpts: {
+				getNextPageParam: (lastPage: unknown) => unknown
+				getPreviousPageParam?: (firstPage: unknown) => unknown
+				initialCursor?: unknown
+			},
+		) => {
+			const { initialCursor = null, ...restOpts } = infiniteOpts
+
+			return edenInfiniteQueryOptions({
+				path: paths,
+				input,
+				initialPageParam: initialCursor,
+				fetch: async (fullInput, signal) => {
+					// Build path without the method
+					const pathWithoutMethod = paths.slice(0, -1)
+					const method = getMethod(paths)
+
+					// Navigate to the endpoint
+					const edenEndpoint = navigateToEdenPath(
+						client,
+						pathWithoutMethod,
+						pathParams,
+					)
+
+					// Call the method with cursor included in query
+					const methodFn = (edenEndpoint as Record<string, unknown>)[
+						method
+					] as (opts: unknown) => Promise<{ data: unknown; error: unknown }>
+
+					const result = await methodFn({
+						query: fullInput,
+						fetch: { signal },
+					})
+
+					if (result.error) throw result.error
+					return result.data
+				},
+				opts: restOpts as Parameters<
+					typeof edenInfiniteQueryOptions
+				>[0]["opts"],
+			})
+		},
+
+		infiniteQueryKey: (input?: unknown): EdenQueryKey => {
+			return getQueryKey({ path: paths, input, type: "infinite" })
+		},
+
+		infiniteQueryFilter: (
+			input?: unknown,
+			filters?: QueryFilters,
+		): WithRequired<QueryFilters, "queryKey"> => {
+			return {
+				...filters,
+				queryKey: getQueryKey({ path: paths, input, type: "infinite" }),
+			}
+		},
+	}
+}
+
+// ============================================================================
+// Mutation Procedure
+// ============================================================================
+
+interface MutationProcedureOptions {
+	client: unknown
+	queryClient: QueryClient | (() => QueryClient)
+	paths: string[]
+	pathParams: Record<string, unknown>[]
+}
+
+/**
+ * Creates mutation procedure methods (mutationOptions, mutationKey)
+ */
+function createMutationProcedure(opts: MutationProcedureOptions) {
+	const { client, paths, pathParams } = opts
+
+	return {
+		mutationOptions: (mutationOpts?: unknown) => {
+			return edenMutationOptions({
+				path: paths,
+				mutate: async (input) => {
+					// Build path without the method
+					const pathWithoutMethod = paths.slice(0, -1)
+					const method = getMethod(paths)
+
+					// Navigate to the endpoint
+					const edenEndpoint = navigateToEdenPath(
+						client,
+						pathWithoutMethod,
+						pathParams,
+					)
+
+					// Call the method with body
+					const methodFn = (edenEndpoint as Record<string, unknown>)[
+						method
+					] as (body: unknown) => Promise<{ data: unknown; error: unknown }>
+
+					const result = await methodFn(input)
+
+					if (result.error) throw result.error
+					return result.data
+				},
+				opts: mutationOpts as Parameters<typeof edenMutationOptions>[0]["opts"],
+			})
+		},
+
+		mutationKey: (): EdenMutationKey => {
+			return getMutationKey({ path: paths })
+		},
+	}
+}
+
+// ============================================================================
+// Main Proxy Creation
+// ============================================================================
+
+/**
+ * Creates a recursive proxy that decorates Eden routes with TanStack Query options.
+ *
+ * @example
+ * ```typescript
+ * const client = treaty<App>('http://localhost:3000')
+ * const queryClient = new QueryClient()
+ *
+ * const eden = createEdenOptionsProxy({ client, queryClient })
+ *
+ * // Query options
+ * const options = eden.api.users.get.queryOptions({ search: 'test' })
+ * const { data } = useQuery(options)
+ *
+ * // With path params
+ * const userOptions = eden.api.users({ id: '1' }).get.queryOptions()
+ *
+ * // Mutation options
+ * const createOptions = eden.api.users.post.mutationOptions({
+ *   onSuccess: () => queryClient.invalidateQueries({ queryKey: eden.api.users.get.queryKey() })
+ * })
+ * ```
+ */
+export function createEdenOptionsProxy<TClient>(
+	opts: CreateEdenOptionsProxyOptions<TClient>,
+	paths: string[] = [],
+	pathParams: Record<string, unknown>[] = [],
+): unknown {
+	const { client, queryClient } = opts
+
+	const proxy = new Proxy(() => {}, {
+		get: (_target, prop: string) => {
+			// Skip internal properties
+			if (typeof prop === "symbol" || prop === "then") {
+				return undefined
+			}
+
+			// Check if it's a query method (GET, OPTIONS, HEAD)
+			if (isQueryMethod(prop)) {
+				return createQueryProcedure({
+					client,
+					queryClient,
+					paths: [...paths, prop],
+					pathParams,
+				})
+			}
+
+			// Check if it's a mutation method (POST, PUT, PATCH, DELETE)
+			if (isMutationMethod(prop)) {
+				return createMutationProcedure({
+					client,
+					queryClient,
+					paths: [...paths, prop],
+					pathParams,
+				})
+			}
+
+			// Otherwise, continue building path
+			return createEdenOptionsProxy(opts, [...paths, prop], pathParams)
+		},
+
+		apply: (_target, _thisArg, args) => {
+			// Function call = path params
+			// e.g., eden.api.users({ id: '1' }) → adds path param
+			const params = args[0] as Record<string, unknown>
+			return createEdenOptionsProxy(opts, paths, [...pathParams, params])
+		},
+	})
+
+	return proxy
+}

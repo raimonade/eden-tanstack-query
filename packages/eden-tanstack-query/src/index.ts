@@ -27,6 +27,11 @@ export type {
 export { edenMutationOptions } from "./options/mutationOptions"
 // Query options factory
 export { edenQueryOptions } from "./options/queryOptions"
+// Options proxy
+export {
+	type CreateEdenOptionsProxyOptions,
+	createEdenOptionsProxy,
+} from "./proxy/createOptionsProxy"
 
 // Route type inference utilities
 export type {
