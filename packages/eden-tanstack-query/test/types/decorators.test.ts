@@ -287,8 +287,9 @@ describe("Cursor Type Extraction", () => {
 // ============================================================================
 
 describe("DecorateRoute", () => {
-	type UserIdRoute = Routes["/users/:id"]["get"]
-	type CreateUserRoute = Routes["/users"]["post"]
+	// Elysia ~Routes structure: { users: { ":id": { get: ... }, get: ..., post: ... } }
+	type UserIdRoute = Routes["users"][":id"]["get"]
+	type CreateUserRoute = Routes["users"]["post"]
 
 	test("GET route decorated as query procedure", () => {
 		type Decorated = DecorateRoute<UserIdRoute, "get">
@@ -322,7 +323,7 @@ describe("DecorateRoute", () => {
 	})
 
 	test("PUT route decorated as mutation procedure", () => {
-		type PutRoute = Routes["/users/:id"]["put"]
+		type PutRoute = Routes["users"][":id"]["put"]
 		type Decorated = DecorateRoute<PutRoute, "put">
 
 		type HasMutationOptions = "mutationOptions" extends keyof Decorated
@@ -333,7 +334,7 @@ describe("DecorateRoute", () => {
 	})
 
 	test("DELETE route decorated as mutation procedure", () => {
-		type DeleteRoute = Routes["/users/:id"]["delete"]
+		type DeleteRoute = Routes["users"][":id"]["delete"]
 		type Decorated = DecorateRoute<DeleteRoute, "delete">
 
 		type HasMutationOptions = "mutationOptions" extends keyof Decorated
@@ -350,7 +351,8 @@ describe("DecorateRoute", () => {
 
 describe("DecoratedRouteMethods", () => {
 	test("decorates all methods of a route", () => {
-		type UserIdMethods = Routes["/users/:id"]
+		// Elysia ~Routes structure: { users: { ":id": { get: ..., put: ..., delete: ... } } }
+		type UserIdMethods = Routes["users"][":id"]
 		type Decorated = DecoratedRouteMethods<UserIdMethods>
 
 		// GET should have queryOptions
@@ -380,13 +382,15 @@ describe("DecoratedRouteMethods", () => {
 
 describe("ExtractRouteDef", () => {
 	test("extracts definition from GET route", () => {
-		type UserIdRoute = Routes["/users/:id"]["get"]
+		type UserIdRoute = Routes["users"][":id"]["get"]
 		type Def = ExtractRouteDef<UserIdRoute, "get">
 
-		// Input should have id (from path params)
-		type InputHasId = "id" extends keyof Def["input"] ? true : false
-		const inputHasId: InputHasId = true
-		expect(inputHasId).toBe(true)
+		// For GET routes, input is only query params (path params passed via proxy callable)
+		// UserIdRoute has no query params, so input should be empty
+		// biome-ignore lint/complexity/noBannedTypes: {} check is intentional for empty object test
+		type InputIsEmpty = {} extends Def["input"] ? true : false
+		const inputIsEmpty: InputIsEmpty = true
+		expect(inputIsEmpty).toBe(true)
 
 		// Output should have id, name, email
 		type OutputHasId = Def["output"] extends { id: string } ? true : false
@@ -403,7 +407,7 @@ describe("ExtractRouteDef", () => {
 	})
 
 	test("extracts definition from POST route", () => {
-		type CreateUserRoute = Routes["/users"]["post"]
+		type CreateUserRoute = Routes["users"]["post"]
 		type Def = ExtractRouteDef<CreateUserRoute, "post">
 
 		// Input should be body (name, email)
@@ -425,19 +429,18 @@ describe("ExtractRouteDef", () => {
 describe("EdenOptionsProxy", () => {
 	type Proxy = EdenOptionsProxy<App>
 
-	test("has route paths as keys", () => {
-		type HasUsers = "/users" extends keyof Proxy ? true : false
-		type HasUsersId = "/users/:id" extends keyof Proxy ? true : false
+	test("has route segments as keys", () => {
+		// EdenOptionsProxy uses nested object structure, not full paths
+		// e.g., proxy.users instead of proxy["/users"]
+		type HasUsers = "users" extends keyof Proxy ? true : false
 
 		const hasUsers: HasUsers = true
-		const hasUsersId: HasUsersId = true
 
 		expect(hasUsers).toBe(true)
-		expect(hasUsersId).toBe(true)
 	})
 
-	test("route paths have HTTP methods", () => {
-		type UsersRoute = Proxy["/users"]
+	test("route segments have HTTP methods or nested routes", () => {
+		type UsersRoute = Proxy["users"]
 		type HasGet = "get" extends keyof UsersRoute ? true : false
 		type HasPost = "post" extends keyof UsersRoute ? true : false
 
@@ -449,7 +452,7 @@ describe("EdenOptionsProxy", () => {
 	})
 
 	test("GET method has queryOptions", () => {
-		type UsersGet = Proxy["/users"]["get"]
+		type UsersGet = Proxy["users"]["get"]
 		type HasQueryOptions = "queryOptions" extends keyof UsersGet ? true : false
 
 		const hasQueryOptions: HasQueryOptions = true
@@ -457,13 +460,25 @@ describe("EdenOptionsProxy", () => {
 	})
 
 	test("POST method has mutationOptions", () => {
-		type UsersPost = Proxy["/users"]["post"]
+		type UsersPost = Proxy["users"]["post"]
 		type HasMutationOptions = "mutationOptions" extends keyof UsersPost
 			? true
 			: false
 
 		const hasMutationOptions: HasMutationOptions = true
 		expect(hasMutationOptions).toBe(true)
+	})
+
+	test("path params routes are callable", () => {
+		// For routes with path params, the proxy is callable
+		// e.g., proxy.users({ id: '1' }).get.queryOptions()
+		type UsersCallable = Proxy["users"] extends (params: {
+			id: string | number
+		}) => unknown
+			? true
+			: false
+		const usersCallable: UsersCallable = true
+		expect(usersCallable).toBe(true)
 	})
 })
 
@@ -514,5 +529,180 @@ describe("Type Inference via ~types", () => {
 
 		expect(inputCorrect).toBe(true)
 		expect(outputCorrect).toBe(true)
+	})
+})
+
+// ============================================================================
+// EdenMutationFunction Tests
+// ============================================================================
+
+describe("EdenMutationFunction", () => {
+	test("accepts required input", () => {
+		type MutFn = import("../../src/types/decorators").EdenMutationFunction<
+			{ result: string },
+			{ name: string }
+		>
+
+		// Should require input
+		type InputRequired = Parameters<MutFn>[0] extends { name: string }
+			? true
+			: false
+		const inputRequired: InputRequired = true
+		expect(inputRequired).toBe(true)
+	})
+
+	test("allows optional input when empty", () => {
+		type MutFn = import("../../src/types/decorators").EdenMutationFunction<
+			{ result: string },
+			// biome-ignore lint/complexity/noBannedTypes: Testing empty input
+			{}
+		>
+
+		// Should allow void (no args) due to EmptyToVoid
+		// biome-ignore lint/suspicious/noConfusingVoidType: Testing void in EmptyToVoid
+		type AllowsVoid = void extends Parameters<MutFn>[0] ? true : false
+		const allowsVoid: AllowsVoid = true
+		expect(allowsVoid).toBe(true)
+	})
+
+	test("returns Promise of output", () => {
+		type MutFn = import("../../src/types/decorators").EdenMutationFunction<
+			{ id: string; name: string },
+			{ name: string }
+		>
+
+		type Returns = ReturnType<MutFn>
+		type IsPromise =
+			Returns extends Promise<{ id: string; name: string }> ? true : false
+		const isPromise: IsPromise = true
+		expect(isPromise).toBe(true)
+	})
+})
+
+// ============================================================================
+// RouteParamsInput Tests
+// ============================================================================
+
+describe("RouteParamsInput", () => {
+	test("extracts param names from path param keys", () => {
+		type Input = import("../../src/types/decorators").RouteParamsInput<{
+			":id": unknown
+			":slug": unknown
+		}>
+
+		type HasId = "id" extends keyof Input ? true : false
+		type HasSlug = "slug" extends keyof Input ? true : false
+
+		const hasId: HasId = true
+		const hasSlug: HasSlug = true
+
+		expect(hasId).toBe(true)
+		expect(hasSlug).toBe(true)
+	})
+
+	test("param values are string | number", () => {
+		type Input = import("../../src/types/decorators").RouteParamsInput<{
+			":id": unknown
+		}>
+
+		type IdType = Input["id"]
+		type IsStringOrNumber = IdType extends string | number ? true : false
+		const isStringOrNumber: IsStringOrNumber = true
+		expect(isStringOrNumber).toBe(true)
+	})
+
+	test("ignores non-param keys", () => {
+		type Input = import("../../src/types/decorators").RouteParamsInput<{
+			":id": unknown
+			get: unknown
+			post: unknown
+		}>
+
+		// Only :id should be extracted (without colon)
+		type HasId = "id" extends keyof Input ? true : false
+		type HasGet = "get" extends keyof Input ? true : false
+		type HasPost = "post" extends keyof Input ? true : false
+
+		const hasId: HasId = true
+		const hasGet: HasGet = false
+		const hasPost: HasPost = false
+
+		expect(hasId).toBe(true)
+		expect(hasGet).toBe(false)
+		expect(hasPost).toBe(false)
+	})
+})
+
+// ============================================================================
+// inferInput / inferOutput / inferError Tests
+// ============================================================================
+
+describe("inferInput / inferOutput / inferError", () => {
+	// These utilities are already tested indirectly via ~types tests above
+	// Testing they exist and have correct structure
+
+	test("inferInput type exists", () => {
+		// Test via ~types which is the internal mechanism
+		type TestDef = { input: { id: string }; output: unknown; error: unknown }
+		type QueryProc = DecorateQueryProcedure<TestDef>
+		type Input = QueryProc["~types"]["input"]
+
+		type Check = Input extends { id: string } ? true : false
+		const check: Check = true
+		expect(check).toBe(true)
+	})
+
+	test("inferOutput type exists", () => {
+		type TestDef = { input: unknown; output: { name: string }; error: unknown }
+		type QueryProc = DecorateQueryProcedure<TestDef>
+		type Output = QueryProc["~types"]["output"]
+
+		type Check = Output extends { name: string } ? true : false
+		const check: Check = true
+		expect(check).toBe(true)
+	})
+
+	test("inferError type exists", () => {
+		type TestDef = { input: unknown; output: unknown; error: { code: number } }
+		type QueryProc = DecorateQueryProcedure<TestDef>
+		type Err = QueryProc["~types"]["error"]
+
+		type Check = Err extends { code: number } ? true : false
+		const check: Check = true
+		expect(check).toBe(true)
+	})
+})
+
+// ============================================================================
+// EdenQueryBaseOptions Tests
+// ============================================================================
+
+describe("EdenQueryBaseOptions", () => {
+	test("eden property is optional", () => {
+		type Opts = import("../../src/types/decorators").EdenQueryBaseOptions
+
+		// eden should be optional
+		type EdenIsOptional = undefined extends Opts["eden"] ? true : false
+		const edenIsOptional: EdenIsOptional = true
+		expect(edenIsOptional).toBe(true)
+	})
+})
+
+// ============================================================================
+// EdenQueryOptionsResult Tests
+// ============================================================================
+
+describe("EdenQueryOptionsResult", () => {
+	test("has eden.path property", () => {
+		type Result = import("../../src/types/decorators").EdenQueryOptionsResult
+
+		type HasEden = "eden" extends keyof Result ? true : false
+		type HasPath = Result["eden"] extends { path: string } ? true : false
+
+		const hasEden: HasEden = true
+		const hasPath: HasPath = true
+
+		expect(hasEden).toBe(true)
+		expect(hasPath).toBe(true)
 	})
 })

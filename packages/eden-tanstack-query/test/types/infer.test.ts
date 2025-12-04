@@ -205,13 +205,14 @@ describe("Type Inference", () => {
 // ============================================================================
 
 describe("RouteSchema Type Extraction", () => {
-	// Extract actual route schemas from the app's _routes
+	// Extract actual route schemas from the app's ~Routes
+	// Elysia ~Routes structure: { users: { ":id": { get: ... }, get: ..., post: ... } }
 	type Routes = ExtractRoutes<App>
 
 	describe("InferRouteParams", () => {
 		test("extracts params from route with path params", () => {
-			// The route /users/:id should have params
-			type UserIdRoute = Routes["/users/:id"]["get"]
+			// The route /users/:id has params in its schema
+			type UserIdRoute = Routes["users"][":id"]["get"]
 			type Params = InferRouteParams<UserIdRoute>
 
 			// Params should include 'id'
@@ -223,7 +224,7 @@ describe("RouteSchema Type Extraction", () => {
 
 	describe("InferRouteQuery", () => {
 		test("extracts query params from GET route", () => {
-			type UsersRoute = Routes["/users"]["get"]
+			type UsersRoute = Routes["users"]["get"]
 			type Query = InferRouteQuery<UsersRoute>
 
 			// Query should have search and limit
@@ -240,7 +241,7 @@ describe("RouteSchema Type Extraction", () => {
 
 	describe("InferRouteBody", () => {
 		test("extracts body from POST route", () => {
-			type CreateUserRoute = Routes["/users"]["post"]
+			type CreateUserRoute = Routes["users"]["post"]
 			type Body = InferRouteBody<CreateUserRoute>
 
 			// Body should have name and email
@@ -256,18 +257,21 @@ describe("RouteSchema Type Extraction", () => {
 	})
 
 	describe("InferRouteInput", () => {
-		test("returns params + query for GET routes", () => {
-			type UserIdRoute = Routes["/users/:id"]["get"]
+		test("returns only query params for GET routes (path params via proxy)", () => {
+			type UserIdRoute = Routes["users"][":id"]["get"]
 			type Input = InferRouteInput<UserIdRoute, "get">
 
-			// For GET, input should include params
-			type HasId = "id" extends keyof Input ? true : false
-			const hasId: HasId = true
-			expect(hasId).toBe(true)
+			// For GET routes, input is only query params
+			// Path params are passed via proxy callable: eden.users({ id: '1' })
+			// UserIdRoute has no query params, so input should be empty
+			// biome-ignore lint/complexity/noBannedTypes: {} check is intentional for empty object test
+			type InputIsEmpty = {} extends Input ? true : false
+			const inputIsEmpty: InputIsEmpty = true
+			expect(inputIsEmpty).toBe(true)
 		})
 
 		test("returns body for POST routes", () => {
-			type CreateUserRoute = Routes["/users"]["post"]
+			type CreateUserRoute = Routes["users"]["post"]
 			type Input = InferRouteInput<CreateUserRoute, "post">
 
 			// For POST, input should be the body
@@ -281,7 +285,7 @@ describe("RouteSchema Type Extraction", () => {
 
 	describe("InferRouteOutput", () => {
 		test("extracts output type from GET route", () => {
-			type UserIdRoute = Routes["/users/:id"]["get"]
+			type UserIdRoute = Routes["users"][":id"]["get"]
 			type Output = InferRouteOutput<UserIdRoute>
 
 			// Output should have id, name, email
@@ -299,7 +303,7 @@ describe("RouteSchema Type Extraction", () => {
 		})
 
 		test("extracts output type from POST route", () => {
-			type CreateUserRoute = Routes["/users"]["post"]
+			type CreateUserRoute = Routes["users"]["post"]
 			type Output = InferRouteOutput<CreateUserRoute>
 
 			// Output should have id, name, email
@@ -314,7 +318,7 @@ describe("RouteSchema Type Extraction", () => {
 		})
 
 		test("extracts output type from DELETE route", () => {
-			type DeleteUserRoute = Routes["/users/:id"]["delete"]
+			type DeleteUserRoute = Routes["users"][":id"]["delete"]
 			type Output = InferRouteOutput<DeleteUserRoute>
 
 			// Output should have deleted and id

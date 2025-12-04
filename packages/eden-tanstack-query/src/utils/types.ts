@@ -41,3 +41,22 @@ export type NonNeverKeys<T> = {
  * Remove never values from object type
  */
 export type OmitNever<T> = Pick<T, NonNeverKeys<T>>
+
+/**
+ * Converts an empty object to void, making function arguments optional.
+ *
+ * @example
+ * ```ts
+ * // value is marked as required, but "void" makes it optional.
+ * function myFunction(value: void | number) {
+ *   return value
+ * }
+ *
+ * // Both are valid calls.
+ * myFunction()
+ * myFunction(1)
+ * ```
+ */
+// biome-ignore lint/suspicious/noConfusingVoidType: void in union is intentional for optional args
+// biome-ignore lint/complexity/noBannedTypes: {} check is standard pattern for empty object detection
+export type EmptyToVoid<T> = {} extends T ? void | T : T

@@ -94,7 +94,8 @@ export type InferRouteOptions<TRoute extends RouteSchema> = Simplify<
 /**
  * Combined input type for a route.
  *
- * For query routes (GET, HEAD, OPTIONS): params + query
+ * For query routes (GET, HEAD, OPTIONS): only query params
+ * (path params are passed via proxy callable, e.g., eden.users({ id: '1' }))
  * For mutation routes (POST, PUT, PATCH, DELETE): body
  *
  * @template TRoute - The RouteSchema to extract from
@@ -104,7 +105,7 @@ export type InferRouteInput<
 	TRoute extends RouteSchema,
 	TMethod extends string = "get",
 > = TMethod extends "get" | "head" | "options"
-	? Simplify<InferRouteParams<TRoute> & InferRouteQuery<TRoute>>
+	? Simplify<InferRouteQuery<TRoute>>
 	: InferRouteBody<TRoute>
 
 // ============================================================================
@@ -182,14 +183,14 @@ export type InferRouteError<TRoute extends RouteSchema> =
 
 /**
  * Extract the routes schema from an Elysia app.
- * Accesses the internal `_routes` type that Eden Treaty uses.
+ * Accesses the internal `~Routes` type that Eden Treaty uses.
  *
  * @example
  * const app = new Elysia().get('/users', () => [...])
  * type Routes = ExtractRoutes<typeof app>
  */
 export type ExtractRoutes<TApp extends AnyElysia> = TApp extends {
-	_routes: infer TRoutes extends Record<string, unknown>
+	"~Routes": infer TRoutes extends Record<string, unknown>
 }
 	? TRoutes
 	: never

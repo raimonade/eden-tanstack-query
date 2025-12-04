@@ -4,13 +4,16 @@
  * Creates a recursive proxy that decorates Eden routes with TanStack Query options.
  * Transforms Eden Treaty client paths into queryOptions/mutationOptions factories.
  */
+import type { Treaty } from "@elysiajs/eden"
 import type { QueryClient, QueryFilters } from "@tanstack/react-query"
+import type { AnyElysia } from "elysia"
 
 import { getMutationKey, getQueryKey } from "../keys/queryKey"
 import type { EdenMutationKey, EdenQueryKey } from "../keys/types"
 import { edenInfiniteQueryOptions } from "../options/infiniteQueryOptions"
 import { edenMutationOptions } from "../options/mutationOptions"
 import { edenQueryOptions } from "../options/queryOptions"
+import type { EdenOptionsProxy } from "../types/decorators"
 
 // ============================================================================
 // Types
@@ -26,9 +29,9 @@ type QueryMethod = (typeof QUERY_METHODS)[number]
 type MutationMethod = (typeof MUTATION_METHODS)[number]
 
 /** Options for creating the proxy */
-export interface CreateEdenOptionsProxyOptions<TClient> {
+export interface CreateEdenOptionsProxyOptions<TApp extends AnyElysia> {
 	/** Eden Treaty client instance */
-	client: TClient
+	client: Treaty.Create<TApp>
 	/**
 	 * QueryClient instance or getter function.
 	 * Reserved for future use (SSR prefetching, React context integration).
@@ -300,7 +303,7 @@ function createMutationProcedure(opts: ProcedureOptions) {
  * const client = treaty<App>('http://localhost:3000')
  * const queryClient = new QueryClient()
  *
- * const eden = createEdenOptionsProxy({ client, queryClient })
+ * const eden = createEdenOptionsProxy<App>({ client, queryClient })
  *
  * // Query options
  * const options = eden.api.users.get.queryOptions({ search: 'test' })
@@ -315,16 +318,19 @@ function createMutationProcedure(opts: ProcedureOptions) {
  * })
  * ```
  */
-export function createEdenOptionsProxy<TClient>(
-	opts: CreateEdenOptionsProxyOptions<TClient>,
+export function createEdenOptionsProxy<TApp extends AnyElysia>(
+	opts: CreateEdenOptionsProxyOptions<TApp>,
 	paths: string[] = [],
 	pathParams: Record<string, unknown>[] = [],
-): unknown {
+): EdenOptionsProxy<TApp> {
 	const { client } = opts
 
+	// Using function as proxy target to support both property access and function calls.
+	// This enables: eden.api.users({ id }).get.queryOptions()
 	const proxy = new Proxy(function edenProxy() {}, {
 		get: (_target, prop: string) => {
-			// Skip internal properties
+			// Prevent promise auto-unwrapping when proxy is used in async context.
+			// e.g., `await eden` would try to access `.then` which we don't support.
 			if (typeof prop === "symbol" || prop === "then") {
 				return undefined
 			}
@@ -334,7 +340,7 @@ export function createEdenOptionsProxy<TClient>(
 				return createQueryProcedure({
 					client,
 					paths: [...paths, prop],
-					pathParams,
+					pathParams: [...pathParams],
 				})
 			}
 
@@ -343,21 +349,21 @@ export function createEdenOptionsProxy<TClient>(
 				return createMutationProcedure({
 					client,
 					paths: [...paths, prop],
-					pathParams,
+					pathParams: [...pathParams],
 				})
 			}
 
-			// Otherwise, continue building path
-			return createEdenOptionsProxy(opts, [...paths, prop], pathParams)
+			// Otherwise, continue building path (immutable spread to prevent race conditions)
+			return createEdenOptionsProxy(opts, [...paths, prop], [...pathParams])
 		},
 
 		apply: (_target, _thisArg, args) => {
 			// Function call = path params
 			// e.g., eden.api.users({ id: '1' }) → adds path param
 			const params = args[0] as Record<string, unknown>
-			return createEdenOptionsProxy(opts, paths, [...pathParams, params])
+			return createEdenOptionsProxy(opts, [...paths], [...pathParams, params])
 		},
 	})
 
-	return proxy
+	return proxy as unknown as EdenOptionsProxy<TApp>
 }

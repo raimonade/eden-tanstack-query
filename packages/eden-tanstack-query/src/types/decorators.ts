@@ -14,7 +14,7 @@ import type {
 import type { AnyElysia, RouteSchema } from "elysia"
 
 import type { EdenMutationKey, EdenQueryKey } from "../keys/types"
-import type { DeepPartial, Simplify } from "../utils/types"
+import type { DeepPartial, EmptyToVoid, Simplify } from "../utils/types"
 import type {
 	EdenFetchError,
 	ExtractRoutes,
@@ -133,6 +133,8 @@ interface UnusedSkipTokenEdenQueryOptionsOut<TOutput, TError>
  * 1. With initialData - data is never undefined
  * 2. Without skipToken but no initialData
  * 3. With skipToken or undefined input
+ *
+ * Uses EmptyToVoid to make input optional when it's an empty object.
  */
 export interface EdenQueryOptions<TDef extends RouteDefinition> {
 	/**
@@ -140,7 +142,7 @@ export interface EdenQueryOptions<TDef extends RouteDefinition> {
 	 * The returned data will never be undefined.
 	 */
 	<TQueryFnData extends TDef["output"], TData = TQueryFnData>(
-		input: TDef["input"] | SkipToken,
+		input: EmptyToVoid<TDef["input"]> | SkipToken,
 		opts: DefinedEdenQueryOptionsIn<
 			TQueryFnData,
 			TData,
@@ -153,7 +155,7 @@ export interface EdenQueryOptions<TDef extends RouteDefinition> {
 	 * The returned data can be undefined until loaded.
 	 */
 	<TQueryFnData extends TDef["output"], TData = TQueryFnData>(
-		input: TDef["input"],
+		input?: EmptyToVoid<TDef["input"]>,
 		opts?: UnusedSkipTokenEdenQueryOptionsIn<
 			TQueryFnData,
 			TData,
@@ -169,7 +171,7 @@ export interface EdenQueryOptions<TDef extends RouteDefinition> {
 	 * Use skipToken to conditionally disable the query.
 	 */
 	<TQueryFnData extends TDef["output"], TData = TQueryFnData>(
-		input: TDef["input"] | SkipToken,
+		input?: EmptyToVoid<TDef["input"]> | SkipToken,
 		opts?: UndefinedEdenQueryOptionsIn<
 			TQueryFnData,
 			TData,
@@ -183,6 +185,14 @@ export interface EdenQueryOptions<TDef extends RouteDefinition> {
 // ============================================================================
 
 /**
+ * Eden mutation function that supports optional input when empty.
+ * Uses EmptyToVoid to allow calling without arguments when input is void/empty.
+ */
+export type EdenMutationFunction<TOutput, TInput> = (
+	input: EmptyToVoid<TInput>,
+) => Promise<TOutput>
+
+/**
  * Input options for mutations.
  */
 type EdenMutationOptionsIn<TInput, TError, TOutput, TContext> = Omit<
@@ -193,11 +203,13 @@ type EdenMutationOptionsIn<TInput, TError, TOutput, TContext> = Omit<
 
 /**
  * Output options for mutations.
+ * mutationFn is guaranteed to be defined.
  */
 interface EdenMutationOptionsOut<TInput, TError, TOutput, TContext>
 	extends UseMutationOptions<TOutput, TError, TInput, TContext>,
 		EdenQueryOptionsResult {
 	mutationKey: EdenMutationKey
+	mutationFn: EdenMutationFunction<TOutput, TInput>
 }
 
 /**
@@ -281,7 +293,8 @@ type WithRequired<TObj, TKey extends keyof TObj> = TObj & {
 
 /**
  * Decorator for query procedures (GET, OPTIONS, HEAD).
- * Adds queryOptions, queryKey, queryFilter, and optionally infiniteQueryOptions.
+ * Adds queryOptions, queryKey, queryFilter.
+ * For infinite queries, see DecorateInfiniteQueryProcedure (added conditionally via DecorateRoute).
  */
 export interface DecorateQueryProcedure<TDef extends RouteDefinition>
 	extends TypeHelper<TDef> {
@@ -457,25 +470,91 @@ export type DecoratedRouteMethods<
 }
 
 // ============================================================================
+// Path Parameter Extraction
+// ============================================================================
+
+/**
+ * Extract keys that represent path parameters (start with ':').
+ *
+ * @example
+ * type Params = ExtractRouteParams<{ ':id': {...}, get: {...} }>
+ * // { ':id': {...} }
+ */
+export type ExtractRouteParams<T> = {
+	[K in keyof T as K extends `:${string}` ? K : never]: T[K]
+}
+
+/**
+ * Create input object for path parameters.
+ *
+ * @example
+ * type Input = RouteParamsInput<{ ':id': {...}, ':slug': {...} }>
+ * // { id: string | number; slug: string | number }
+ */
+export type RouteParamsInput<T> = {
+	[K in keyof T as K extends `:${infer TParam}` ? TParam : never]:
+		| string
+		| number
+}
+
+// ============================================================================
 // App Decoration
 // ============================================================================
 
 /**
+ * Handle regular path segments (excluding path parameters).
+ *
+ * @template TRoutes - Current level of routes being processed
+ * @template TRouteParams - Keys that are path parameters
+ */
+type DecoratePathSegments<
+	TRoutes extends Record<string, unknown>,
+	TRouteParams = ExtractRouteParams<TRoutes>,
+> = {
+	[K in Exclude<
+		keyof TRoutes,
+		keyof TRouteParams
+	>]: TRoutes[K] extends RouteSchema
+		? DecorateRoute<TRoutes[K], K & string>
+		: TRoutes[K] extends Record<string, unknown>
+			? TRoutes[K] extends Record<string, RouteSchema>
+				? DecoratedRouteMethods<TRoutes[K]>
+				: DecorateRoutes<TRoutes[K]>
+			: never
+}
+
+/**
+ * Handle path parameters by creating a callable function.
+ *
+ * @template TRoutes - Current level of routes being processed
+ * @template TRouteParams - Keys that are path parameters
+ */
+type DecoratePathParams<
+	TRoutes extends Record<string, unknown>,
+	TRouteParams = ExtractRouteParams<TRoutes>,
+	// biome-ignore lint/complexity/noBannedTypes: {} check is standard pattern for empty object
+> = {} extends TRouteParams
+	? // biome-ignore lint/complexity/noBannedTypes: Returns empty intersection when no path params
+		{}
+	: (
+			params: RouteParamsInput<TRouteParams>,
+		) => TRoutes[Extract<keyof TRouteParams, keyof TRoutes>] extends Record<
+			string,
+			unknown
+		>
+			? DecorateRoutes<TRoutes[Extract<keyof TRouteParams, keyof TRoutes>]>
+			: never
+
+/**
  * Recursively decorate all routes in an app's route tree.
  *
- * Handles nested route structures:
- * - If value is a RouteSchema, decorate it
- * - If value is a nested object, recurse
+ * Handles:
+ * - Regular path segments → nested objects
+ * - Path parameters (:id) → callable functions
+ * - HTTP methods → decorated procedures
  */
-export type DecorateRoutes<TRoutes extends Record<string, unknown>> = {
-	[TPath in keyof TRoutes]: TRoutes[TPath] extends Record<string, unknown>
-		? TRoutes[TPath] extends RouteSchema
-			? never // Single RouteSchema at this level shouldn't happen
-			: TRoutes[TPath] extends Record<string, RouteSchema>
-				? DecoratedRouteMethods<TRoutes[TPath]>
-				: DecorateRoutes<TRoutes[TPath]>
-		: never
-}
+export type DecorateRoutes<TRoutes extends Record<string, unknown>> =
+	DecoratePathSegments<TRoutes> & DecoratePathParams<TRoutes>
 
 /**
  * Full decorated options proxy type for an Elysia app.
@@ -483,10 +562,12 @@ export type DecorateRoutes<TRoutes extends Record<string, unknown>> = {
  * @example
  * const app = new Elysia()
  *   .get('/users', () => [...])
+ *   .get('/users/:id', ({ params }) => {...})
  *   .post('/users', ({ body }) => { ... })
  *
  * type Proxy = EdenOptionsProxy<typeof app>
  * // Proxy.users.get.queryOptions(...)
+ * // Proxy.users({ id: '1' }).get.queryOptions(...)
  * // Proxy.users.post.mutationOptions(...)
  */
 export type EdenOptionsProxy<TApp extends AnyElysia> = Simplify<
@@ -505,9 +586,9 @@ export type EdenOptionsProxy<TApp extends AnyElysia> = Simplify<
  */
 export type inferInput<
 	TProcedure extends
-		| DecorateQueryProcedure<any>
-		| DecorateMutationProcedure<any>
-		| DecorateInfiniteQueryProcedure<any>,
+		| DecorateQueryProcedure<RouteDefinition>
+		| DecorateMutationProcedure<RouteDefinition>
+		| DecorateInfiniteQueryProcedure<RouteDefinition>,
 > = TProcedure["~types"]["input"]
 
 /**
@@ -518,9 +599,9 @@ export type inferInput<
  */
 export type inferOutput<
 	TProcedure extends
-		| DecorateQueryProcedure<any>
-		| DecorateMutationProcedure<any>
-		| DecorateInfiniteQueryProcedure<any>,
+		| DecorateQueryProcedure<RouteDefinition>
+		| DecorateMutationProcedure<RouteDefinition>
+		| DecorateInfiniteQueryProcedure<RouteDefinition>,
 > = TProcedure["~types"]["output"]
 
 /**
@@ -531,7 +612,7 @@ export type inferOutput<
  */
 export type inferError<
 	TProcedure extends
-		| DecorateQueryProcedure<any>
-		| DecorateMutationProcedure<any>
-		| DecorateInfiniteQueryProcedure<any>,
+		| DecorateQueryProcedure<RouteDefinition>
+		| DecorateMutationProcedure<RouteDefinition>
+		| DecorateInfiniteQueryProcedure<RouteDefinition>,
 > = TProcedure["~types"]["error"]
