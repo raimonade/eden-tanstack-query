@@ -29,8 +29,12 @@ type MutationMethod = (typeof MUTATION_METHODS)[number]
 export interface CreateEdenOptionsProxyOptions<TClient> {
 	/** Eden Treaty client instance */
 	client: TClient
-	/** QueryClient instance or getter function */
-	queryClient: QueryClient | (() => QueryClient)
+	/**
+	 * QueryClient instance or getter function.
+	 * Reserved for future use (SSR prefetching, React context integration).
+	 * Use a getter when the client may not be available at proxy creation time.
+	 */
+	queryClient?: QueryClient | (() => QueryClient)
 }
 
 /** Helper to make some properties required */
@@ -76,14 +80,25 @@ function navigateToEdenPath(
 	pathParams: Record<string, unknown>[],
 ): unknown {
 	let edenPath = client
-
-	// Apply path segments and params
-	// Path params are applied when we encounter them in the path
 	let paramIndex = 0
 
 	for (const segment of pathSegments) {
+		if (edenPath == null) {
+			throw new Error(
+				`Invalid path: cannot access '${segment}' on null/undefined`,
+			)
+		}
+
 		// Navigate to next segment
-		edenPath = (edenPath as Record<string, unknown>)[segment]
+		const nextPath = (edenPath as Record<string, unknown>)[segment]
+
+		if (nextPath === undefined) {
+			throw new Error(
+				`Invalid path: segment '${segment}' does not exist on client`,
+			)
+		}
+
+		edenPath = nextPath
 
 		// If there's a path param to apply at this level, call as function
 		if (
@@ -106,9 +121,8 @@ function navigateToEdenPath(
 // Query Procedure
 // ============================================================================
 
-interface QueryProcedureOptions {
+interface ProcedureOptions {
 	client: unknown
-	queryClient: QueryClient | (() => QueryClient)
 	paths: string[]
 	pathParams: Record<string, unknown>[]
 }
@@ -116,7 +130,7 @@ interface QueryProcedureOptions {
 /**
  * Creates query procedure methods (queryOptions, queryKey, queryFilter, infiniteQueryOptions)
  */
-function createQueryProcedure(opts: QueryProcedureOptions) {
+function createQueryProcedure(opts: ProcedureOptions) {
 	const { client, paths, pathParams } = opts
 
 	return {
@@ -232,17 +246,10 @@ function createQueryProcedure(opts: QueryProcedureOptions) {
 // Mutation Procedure
 // ============================================================================
 
-interface MutationProcedureOptions {
-	client: unknown
-	queryClient: QueryClient | (() => QueryClient)
-	paths: string[]
-	pathParams: Record<string, unknown>[]
-}
-
 /**
  * Creates mutation procedure methods (mutationOptions, mutationKey)
  */
-function createMutationProcedure(opts: MutationProcedureOptions) {
+function createMutationProcedure(opts: ProcedureOptions) {
 	const { client, paths, pathParams } = opts
 
 	return {
@@ -313,9 +320,9 @@ export function createEdenOptionsProxy<TClient>(
 	paths: string[] = [],
 	pathParams: Record<string, unknown>[] = [],
 ): unknown {
-	const { client, queryClient } = opts
+	const { client } = opts
 
-	const proxy = new Proxy(() => {}, {
+	const proxy = new Proxy(function edenProxy() {}, {
 		get: (_target, prop: string) => {
 			// Skip internal properties
 			if (typeof prop === "symbol" || prop === "then") {
@@ -326,7 +333,6 @@ export function createEdenOptionsProxy<TClient>(
 			if (isQueryMethod(prop)) {
 				return createQueryProcedure({
 					client,
-					queryClient,
 					paths: [...paths, prop],
 					pathParams,
 				})
@@ -336,7 +342,6 @@ export function createEdenOptionsProxy<TClient>(
 			if (isMutationMethod(prop)) {
 				return createMutationProcedure({
 					client,
-					queryClient,
 					paths: [...paths, prop],
 					pathParams,
 				})

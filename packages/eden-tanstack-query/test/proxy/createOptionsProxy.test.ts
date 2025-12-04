@@ -423,5 +423,73 @@ describe("createEdenOptionsProxy", () => {
 				message: "Bad Request",
 			})
 		})
+
+		test("throws error when navigating to non-existent path", async () => {
+			const client = {
+				api: {
+					users: {
+						get: async () => ({ data: [], error: null }),
+					},
+				},
+			}
+			const eden = createEdenOptionsProxy({ client, queryClient }) as any
+
+			// Try to access a path that doesn't exist
+			const options = eden.api.nonexistent.get.queryOptions()
+
+			await expect(queryClient.fetchQuery(options)).rejects.toThrow(
+				"Invalid path: segment 'nonexistent' does not exist on client",
+			)
+		})
+
+		test("throws error when path segment is null", async () => {
+			const client = {
+				api: {
+					users: null,
+				},
+			}
+			const eden = createEdenOptionsProxy({ client, queryClient }) as any
+
+			const options = eden.api.users.get.queryOptions()
+
+			// Error occurs when trying to access method on null
+			await expect(queryClient.fetchQuery(options)).rejects.toThrow()
+		})
+	})
+
+	describe("edge cases", () => {
+		test("works without queryClient option", () => {
+			const client = createSimpleMockClient()
+			const eden = createEdenOptionsProxy({ client }) as any
+
+			const options = eden.api.hello.get.queryOptions()
+
+			expect(options.queryKey[0]).toEqual(["api", "hello", "get"])
+		})
+
+		test("handles empty input object", () => {
+			const client = createSimpleMockClient()
+			const eden = createEdenOptionsProxy({ client, queryClient }) as any
+
+			const key = eden.api.users.get.queryKey({})
+
+			expect(key[0]).toEqual(["api", "users", "get"])
+			expect(key[1]).toEqual({ input: {}, type: "query" })
+		})
+
+		test("handles special characters in path segments", async () => {
+			const client = {
+				"api-v2": {
+					user_profiles: {
+						get: async () => ({ data: [], error: null }),
+					},
+				},
+			}
+			const eden = createEdenOptionsProxy({ client, queryClient }) as any
+
+			const options = eden["api-v2"].user_profiles.get.queryOptions()
+
+			expect(options.eden.path).toBe("api-v2.user_profiles.get")
+		})
 	})
 })
