@@ -4,7 +4,6 @@
  * These tests verify that decorator types correctly add queryOptions,
  * mutationOptions, etc. to routes based on HTTP method.
  */
-import { describe, expect, test } from "bun:test"
 import { Elysia, t } from "elysia"
 
 import type {

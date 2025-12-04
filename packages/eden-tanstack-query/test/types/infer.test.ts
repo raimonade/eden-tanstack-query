@@ -4,7 +4,6 @@
  * These tests verify that types are correctly extracted from Elysia routes.
  * Uses bun:test with compile-time type checking.
  */
-import { describe, expect, test } from "bun:test"
 import { Elysia, t } from "elysia"
 
 import type {

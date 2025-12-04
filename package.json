@@ -12,6 +12,7 @@
 		"build": "bun run --filter=@eden-tanstack-query/* build",
 		"example:basic": "bun run --filter=@eden-tanstack-query/example-basic dev",
 		"test": "bun test",
+		"test:ui": "vitest --ui",
 		"test:types": "bunx tsc --noEmit",
 		"test:all": "bun run test && bun run test:types",
 		"lint": "bunx biome check .",
@@ -21,6 +22,8 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.3.8",
 		"@types/bun": "latest",
-		"typescript": "^5.9.3"
+		"@vitest/ui": "^4.0.15",
+		"typescript": "^5.9.3",
+		"vitest": "^4.0.15"
 	}
 }
