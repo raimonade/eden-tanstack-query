@@ -144,6 +144,7 @@ function createQueryProcedure(opts: ProcedureOptions) {
 			return edenQueryOptions({
 				path: paths,
 				input,
+				pathParams,
 				fetch: async (actualInput, signal) => {
 					// Build path without the method
 					const pathWithoutMethod = paths.slice(0, -1)
@@ -200,6 +201,7 @@ function createQueryProcedure(opts: ProcedureOptions) {
 			return edenInfiniteQueryOptions({
 				path: paths,
 				input,
+				pathParams,
 				initialPageParam: initialCursor,
 				fetch: async (fullInput, signal) => {
 					// Build path without the method
