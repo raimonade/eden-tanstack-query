@@ -12,7 +12,7 @@ export {
 	type CreateEdenTanStackQueryResult,
 	createEdenTanStackQuery,
 } from "./createEdenTanStackQuery"
-export type { GetMutationKeyOptions, GetQueryKeyOptions } from "./keys/queryKey"
+export type { GetMutationKeyOptions, GetQueryKeyOptions, PositionedParam } from "./keys/queryKey"
 // Query key generation
 export { getMutationKey, getQueryKey } from "./keys/queryKey"
 // Query key types
