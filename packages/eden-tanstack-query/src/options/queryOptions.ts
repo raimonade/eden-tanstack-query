@@ -12,8 +12,9 @@ import type {
 } from "@tanstack/react-query"
 import { queryOptions, skipToken } from "@tanstack/react-query"
 
-import { getQueryKey } from "../keys/queryKey"
 import type { EdenQueryKey } from "../keys/types"
+
+import { getQueryKey, type PositionedParam } from "../keys/queryKey"
 
 // ============================================================================
 // Input Types
@@ -45,6 +46,8 @@ export interface EdenQueryOptionsArgs<TInput, TOutput> {
 	path: string[]
 	/** Input parameters or skipToken */
 	input: TInput | SkipToken
+	/** Path parameters (e.g., { id: '1' } for /users/:id) */
+	pathParams?: PositionedParam[]
 	/** Function to fetch data */
 	fetch: (input: TInput, signal?: AbortSignal) => Promise<TOutput>
 }
@@ -183,16 +186,18 @@ export function edenQueryOptions<TInput, TOutput, TError = Error>(
 export function edenQueryOptions<TInput, TOutput, TError = Error>(args: {
 	path: string[]
 	input: TInput | SkipToken
+	pathParams?: PositionedParam[]
 	fetch: (input: TInput, signal?: AbortSignal) => Promise<TOutput>
 	opts?: AnyEdenQueryOptionsIn<TOutput, TOutput, TError>
 }): AnyEdenQueryOptionsOut<TOutput, TOutput, TError> {
-	const { path, input, fetch: fetchFn, opts } = args
+	const { path, input, pathParams, fetch: fetchFn, opts } = args
 
 	const inputIsSkipToken = input === skipToken
 
 	const queryKey = getQueryKey({
 		path,
 		input: inputIsSkipToken ? undefined : input,
+		pathParams,
 		type: "query",
 	})
 

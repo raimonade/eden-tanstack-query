@@ -12,8 +12,9 @@ import type {
 } from "@tanstack/react-query"
 import { skipToken } from "@tanstack/react-query"
 
-import { getQueryKey } from "../keys/queryKey"
 import type { EdenQueryKey } from "../keys/types"
+
+import { getQueryKey, type PositionedParam } from "../keys/queryKey"
 
 // ============================================================================
 // Input Types
@@ -54,6 +55,8 @@ export interface EdenInfiniteQueryOptionsArgs<TInput, TOutput, TPageParam> {
 	path: string[]
 	/** Input parameters (excluding cursor) or skipToken */
 	input: TInput | SkipToken
+	/** Path parameters (e.g., { id: '1' } for /users/:id) */
+	pathParams?: PositionedParam[]
 	/** Function to fetch data with cursor */
 	fetch: (
 		input: TInput & { cursor: TPageParam },
@@ -286,6 +289,7 @@ export function edenInfiniteQueryOptions<
 >(args: {
 	path: string[]
 	input: TInput | SkipToken
+	pathParams?: PositionedParam[]
 	fetch: (
 		input: TInput & { cursor: TPageParam },
 		signal?: AbortSignal,
@@ -293,13 +297,14 @@ export function edenInfiniteQueryOptions<
 	initialPageParam: TPageParam
 	opts: AnyEdenInfiniteQueryOptionsIn<TOutput, TOutput, TError, TPageParam>
 }): AnyEdenInfiniteQueryOptionsOut<TOutput, TError, TPageParam> {
-	const { path, input, fetch: fetchFn, initialPageParam, opts } = args
+	const { path, input, pathParams, fetch: fetchFn, initialPageParam, opts } = args
 
 	const inputIsSkipToken = input === skipToken
 
 	const queryKey = getQueryKey({
 		path,
 		input: inputIsSkipToken ? undefined : input,
+		pathParams,
 		type: "infinite",
 	}) as DataTag<EdenQueryKey, TOutput, TError>
 
