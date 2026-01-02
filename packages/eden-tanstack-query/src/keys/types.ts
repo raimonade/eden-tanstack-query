@@ -30,6 +30,8 @@ export type QueryType = "query" | "infinite" | "any"
  * @template TInput - The input type for the query
  */
 export type EdenQueryKeyMeta<TInput = unknown> = {
+	/** Path parameters (e.g., { id: '1' } for /users/:id) */
+	pathParams?: Record<string, unknown>
 	/** Input parameters for the query */
 	input?: TInput
 	/** Query type discriminator (excludes 'any' as it's only for filtering) */
