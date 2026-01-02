@@ -8,8 +8,9 @@ import type { Treaty } from "@elysiajs/eden"
 import type { QueryClient, QueryFilters } from "@tanstack/react-query"
 import type { AnyElysia } from "elysia"
 
-import { getMutationKey, getQueryKey } from "../keys/queryKey"
 import type { EdenMutationKey, EdenQueryKey } from "../keys/types"
+
+import { getMutationKey, getQueryKey, type PositionedParam } from "../keys/queryKey"
 import { edenInfiniteQueryOptions } from "../options/infiniteQueryOptions"
 import { edenMutationOptions } from "../options/mutationOptions"
 import { edenQueryOptions } from "../options/queryOptions"
@@ -80,12 +81,14 @@ function getMethod(paths: string[]): string {
 function navigateToEdenPath(
 	client: unknown,
 	pathSegments: string[],
-	pathParams: Record<string, unknown>[],
+	pathParams: PositionedParam[],
 ): unknown {
 	let edenPath = client
 	let paramIndex = 0
 
-	for (const segment of pathSegments) {
+	for (let i = 0; i < pathSegments.length; i++) {
+		const segment = pathSegments[i]!
+
 		if (edenPath == null) {
 			throw new Error(
 				`Invalid path: cannot access '${segment}' on null/undefined`,
@@ -104,16 +107,16 @@ function navigateToEdenPath(
 		edenPath = nextPath
 
 		// If there's a path param to apply at this level, call as function
+		const currentParam = pathParams[paramIndex]
 		if (
-			paramIndex < pathParams.length &&
+			currentParam &&
+			currentParam.pathIndex === i &&
 			typeof edenPath === "function" &&
 			!isQueryMethod(segment) &&
 			!isMutationMethod(segment)
 		) {
-			edenPath = (edenPath as (params: unknown) => unknown)(
-				pathParams[paramIndex],
-			)
-			paramIndex++
+			edenPath = (edenPath as (params: unknown) => unknown)(currentParam.params)
+			paramIndex += 1
 		}
 	}
 
@@ -127,7 +130,7 @@ function navigateToEdenPath(
 interface ProcedureOptions {
 	client: unknown
 	paths: string[]
-	pathParams: Record<string, unknown>[]
+	pathParams: PositionedParam[]
 }
 
 /**
@@ -171,7 +174,7 @@ function createQueryProcedure(opts: ProcedureOptions) {
 		},
 
 		queryKey: (input?: unknown): EdenQueryKey => {
-			return getQueryKey({ path: paths, input, type: "query" })
+			return getQueryKey({ path: paths, input, pathParams, type: "query" })
 		},
 
 		queryFilter: (
@@ -180,7 +183,7 @@ function createQueryProcedure(opts: ProcedureOptions) {
 		): WithRequired<QueryFilters, "queryKey"> => {
 			return {
 				...filters,
-				queryKey: getQueryKey({ path: paths, input, type: "any" }),
+				queryKey: getQueryKey({ path: paths, input, pathParams, type: "any" }),
 			}
 		},
 
@@ -230,7 +233,7 @@ function createQueryProcedure(opts: ProcedureOptions) {
 		},
 
 		infiniteQueryKey: (input?: unknown): EdenQueryKey => {
-			return getQueryKey({ path: paths, input, type: "infinite" })
+			return getQueryKey({ path: paths, input, pathParams, type: "infinite" })
 		},
 
 		infiniteQueryFilter: (
@@ -239,7 +242,12 @@ function createQueryProcedure(opts: ProcedureOptions) {
 		): WithRequired<QueryFilters, "queryKey"> => {
 			return {
 				...filters,
-				queryKey: getQueryKey({ path: paths, input, type: "infinite" }),
+				queryKey: getQueryKey({
+					path: paths,
+					input,
+					pathParams,
+					type: "infinite",
+				}),
 			}
 		},
 	}
@@ -321,7 +329,7 @@ function createMutationProcedure(opts: ProcedureOptions) {
 export function createEdenOptionsProxy<TApp extends AnyElysia>(
 	opts: CreateEdenOptionsProxyOptions<TApp>,
 	paths: string[] = [],
-	pathParams: Record<string, unknown>[] = [],
+	pathParams: PositionedParam[] = [],
 ): EdenOptionsProxy<TApp> {
 	const { client } = opts
 
@@ -361,7 +369,11 @@ export function createEdenOptionsProxy<TApp extends AnyElysia>(
 			// Function call = path params
 			// e.g., eden.api.users({ id: '1' }) → adds path param
 			const params = args[0] as Record<string, unknown>
-			return createEdenOptionsProxy(opts, [...paths], [...pathParams, params])
+			const positionedParam: PositionedParam = {
+				pathIndex: paths.length - 1,
+				params,
+			}
+			return createEdenOptionsProxy(opts, [...paths], [...pathParams, positionedParam])
 		},
 	})
 
